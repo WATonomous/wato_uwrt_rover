@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 cmake_minimum_required(VERSION 3.10)
-project(control)
+project(goal_finder)
 
 # Set compiler to use C++ 17 standard
 if(NOT CMAKE_CXX_STANDARD)
@@ -29,34 +29,36 @@ find_package(rclcpp REQUIRED)      # ROS2 C++ package
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(vision_msgs REQUIRED)
 
 # Compiles source files into a library
 # A library is not executed, instead other executables can link
 # against it to access defined methods and classes.
 # We build a library so that the methods defined can be used by
 # both the unit test and ROS2 node executables.
-add_library(control_lib
-  src/control_core.cpp)
+add_library(goal_finder_lib
+  src/goal_finder_core.cpp)
 # Indicate to compiler where to search for header files
-target_include_directories(control_lib
+target_include_directories(goal_finder_lib
   PUBLIC
   include)
 
 # Add ROS2 dependencies required by package
-ament_target_dependencies(control_lib
+ament_target_dependencies(goal_finder_lib
   rclcpp
   geometry_msgs
   nav_msgs
-  tf2)
+  tf2
+  vision_msgs)
 
 # Create ROS2 node executable from source files
-add_executable(control_node src/control_node.cpp)
+add_executable(goal_finder_node src/goal_finder_node.cpp)
 # Link to the previously built library to access Transformer classes and methods
-target_link_libraries(control_node control_lib)
+target_link_libraries(goal_finder_node goal_finder_lib)
 
 # Copy executable to installation location
 install(TARGETS
-  control_node
+  goal_finder_node
   DESTINATION lib/${PROJECT_NAME})
 
 # Copy launch and config files to installation location

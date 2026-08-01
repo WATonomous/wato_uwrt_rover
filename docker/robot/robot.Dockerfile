@@ -21,6 +21,7 @@ COPY src/robot/map_memory map_memory
 COPY src/robot/planner planner
 COPY src/robot/control control
 COPY src/robot/bringup_robot bringup_robot
+COPY src/robot/goal_finder goal_finder
 
 # Scan for rosdeps
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]

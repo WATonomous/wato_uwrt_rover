@@ -20,7 +20,6 @@ subscribe to /image topic and log detection results
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from vision_msgs.msg import Detection2D
 from vision_msgs.msg import Detection2DArray
 from cv_bridge import CvBridge
 import numpy as np
@@ -78,7 +77,9 @@ class YoloInference(Node):
             raise RuntimeError(f"Unsupported model extension: {ext}")
 
         self.annotated_pub = self.create_publisher(Image, "/detections_image", 10)
-        self.detections_pub = self.create_publisher(Detection2DArray,"/yolo_detections",10)
+        self.detections_pub = self.create_publisher(
+            Detection2DArray, "/yolo_detections", 10
+        )
 
         # Bridge & subscription
         self.bridge = CvBridge()
@@ -120,31 +121,32 @@ class YoloInference(Node):
         annotated_msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
         self.annotated_pub.publish(annotated_msg)
 
-        #Published detection data
-        detection_msg = Detection2DArray() #create a message
+        # Published detection data
+        detections_msg = Detection2DArray()  # create a message
         detections_msg.header = msg.header
 
-        for x1,y1,x2,y2,conf,cls in detections:
-            #turn into x,y,w,h format
-            x = (x1+x2)/2
-            y = (y1+y2)/2
-            W = x2-x1
-            h = y2-y1
+        for x1, y1, x2, y2, conf, cls in detections:
+            # turn into x,y,w,h format
+            x = (x1 + x2) / 2
+            y = (y1 + y2) / 2
+            w = x2 - x1
+            h = y2 - y1
 
-            #set bbox
+            # set bbox
+            detection = Detection2D() # create message
             detection.bbox.center.x = x
             detection.bbox.center.y = y
             detection.bbox.size_x = w
             detection.bbox.size_y = h
 
-            #set class and confidence
-            hypothesis = ObjectHypothesis()
+            # set class and confidence
+            hypothesis = ObjectHypothesis() # create message
             hypothesis.id = cls
             hypothesis.score = conf
             detection.results.append(hypothesis)
 
             detections_msg.detections.append(detection)
-        
+
         self.detections_pub.publish(detections_msg)
 
         self.get_logger().info(f"Detected {len(detections)} objects")
