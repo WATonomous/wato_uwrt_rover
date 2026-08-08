@@ -1,77 +1,8 @@
-Publishers:
--goal point
+Things still gotta add:
+-need to subscribe to a topic that can give information about what object its trying to detect, should then also switch the robot state into searching
+-also need a way to switch state back to waiting for object when robot has moved to the goal_point, somehow connect to control node
+-way to do this is make a function that checks distance to goal point, if its close enough switches state back to waiting, add this function
+into if else block in timer callback
 
-Subscribers:
--memory map(or costmap not sure yet)
--pose(rotation to find transforms)
--image detection(annotation)
-
-Other stuff it needs to know:
--what type of object needs currently searching for
--state of the robot(looking for object, not looking, waiting for object to be reached)
-    -when looking for object spins around is circle
-    -when not looking doesn't do anything
-    -when waiting for object its moving towards it, can't spin around in place(when path isn't empty)
--when it is searching, spins around on the spot
--stop when it detects an object
--find angle away from center of the robot
--on a costmap/memory map, extend line out from the robot at the calculated angle until it reaches an object
--that should be the goal point where the object is
--use pose orientation and where in the image the object is to find the point of goal
-
-Suggested logical process (map to your callbacks/states):
-
-Inputs & outputs (what you already have)
-map_sub_ (occupancy grid): use for reachability, free/unknown/obstacle checks.
-odom_sub_: robot pose + goal-arrival checks.
-object_sub_: detections (camera/local coordinates or bounding boxes).
-goal_pub_ (PointStamped): publish chosen global goal for navigator.
-High-level states (fits your State enum)
-WAITING_FOR_OBJECT: idle; accept detection messages.
-SEARCHING_FOR_OBJECT: active search behavior when no detection.
-MOVING_TO_OBJECT: a navigation goal is published and robot moves to it.
-Detection handling (objectCallback)
-Debounce detections: require N consistent detections or confidence threshold to avoid false positives.
-Convert detection to a point in a global frame using cameraToGlobal() (use TF: camera -> base_link -> map).
-If transform fails or TF delayed, queue the detection and retry a few times before discarding.
-Obtain candidate goal point(s):
-Primary: the global point on the detected object.
-If that point lies inside an occupied cell or is too close to obstacles, compute an approach point by stepping back along the camera-to-object ray to the nearest free cell or an offset distance.
-Feasibility check (use map_sub_)
-Raycast or sample the occupancy grid from robot pose to candidate goal to ensure a free path (or to detect blocking obstacles).
-If reachable, publish goal_pub_ with the safe approach point and set state_ = MOVING_TO_OBJECT.
-If not reachable, trigger recovery: attempt alternate approach points around object (sidelong offsets) or go to SEARCHING_FOR_OBJECT.
-Navigation & monitoring (odomCallback + feedback)
-While MOVING_TO_OBJECT, monitor odom to detect goal arrival (distance & orientation tolerances).
-Also monitor object_sub_: if object is lost while moving, either:
-Continue to the last known approach point for a short time, or
-Switch back to SEARCHING_FOR_OBJECT to re-acquire.
-If navigation fails (planner/local costmap reports failure), switch to recovery.
-Search behaviors (SEARCHING_FOR_OBJECT)
-Quick strategies:
-Rotate-in-place scan (use camera and detectors) for short-range detection.
-Short waypoint spiral/expansion around last-seen location.
-Move to frontier/unknown cells in the occupancy grid if wide-area search is needed.
-Implement timeouts and a retry limit for each method; escalate through search behaviors (scan → spiral → frontier) before giving up.
-Recovery & safety
-If object_sub_ or map_sub_ indicates sensor failure or corrupted data, halt and publish diagnostics rather than blind motion.
-Maintain a safety velocity (publish zero cmd_vel or let the local controller stop) if no safe approach can be found.
-Log reasons and publish a "search-failed" diagnostic after retries/timeouts.
-Practical parameters & heuristics
-Detection confidence threshold and minimum detections (e.g., 2–3 frames).
-Approach offset distance from object (to avoid collisions).
-Goal arrival threshold (e.g., 0.2 m and small angle).
-Replan/retry limits and cumulative search timeout.
-Small hysteresis for state transitions to avoid oscillation.
-Implementation mapping to your functions
-mapCallback(): update occupancy grid, recompute reachability caches if needed.
-odomCallback(): update robot pose, check arrival/timeout while MOVING_TO_OBJECT.
-objectCallback(): run detection debounce, cameraToGlobal(), choose approach → feasibility check → goal_pub_.
-timerCallback(): periodic tasks: re-evaluate search strategy, re-issue goals, timeouts, diagnostics.
-cameraToGlobal(): use TF lookups; return optional<PointStamped> so callers can handle failures cleanly.
-Edge cases & robustness
-Multiple simultaneous detections: score by confidence + distance and pick the best candidate or track multiple hypotheses.
-Occluded object: plan to viewpoints around the occluder (sidelong approach).
-Dynamic objects: if the object moves, switch from point-goal to tracking behavior (short-lived follow commands).
-Localization drift: validate detections across frames in robot frame before converting to map frame.
-Summary recommendation: do NOT blindly stop when the path is empty—use the pipeline above: verify detection (goal reached?) → check map reachability → publish safe approach → monitor and recover if lost. This maps directly onto your existing callbacks and State enum and will keep operations safe while preserving progress.
+-currently some error with the yolo inference messages
+-also gotta update docker files?
