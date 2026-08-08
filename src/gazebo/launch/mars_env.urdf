@@ -8,7 +8,7 @@
     <link name="desert">
         <visual>
             <geometry>
-                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/master/src/gazebo/launch/mars.stl" scale="0.1 0.1 0.1"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/master/src/gazebo/launch/mars.stl" scale="0.1 0.1 0.1"/>
             </geometry>
             <material name="beige_brown">
                 <color rgba="0.76 0.60 0.42 1"/>
@@ -16,7 +16,7 @@
         </visual>
         <collision>
             <geometry>
-                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/master/src/gazebo/launch/mars.stl" scale="0.1 0.1 0.1"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/master/src/gazebo/launch/mars.stl" scale="0.1 0.1 0.1"/>
             </geometry>
         </collision>
     </link>
@@ -31,7 +31,7 @@
     <link name="water_bottle">
         <visual>
             <geometry>
-                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/master/src/gazebo/launch/water_bottle.stl" scale="0.4 0.4 0.4"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/master/src/gazebo/launch/water_bottle.stl" scale="0.4 0.4 0.4"/>
             </geometry>
             <material name="water_blue">
                 <color rgba="0.68 0.85 0.90 1"/>
@@ -39,7 +39,7 @@
         </visual>
         <collision>
             <geometry>
-                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/master/src/gazebo/launch/water_bottle.stl" scale="0.4 0.4 0.4"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/master/src/gazebo/launch/water_bottle.stl" scale="0.4 0.4 0.4"/>
             </geometry>
         </collision>
     </link>
@@ -54,7 +54,7 @@
     <link name="mallet">
         <visual>
             <geometry>
-                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/master/src/gazebo/launch/mallet.stl" scale="0.4 0.4 0.4"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/master/src/gazebo/launch/mallet.stl" scale="0.4 0.4 0.4"/>
             </geometry>
             <material name="orange">
                 <color rgba="1 0.4 0.0 1"/>
@@ -62,7 +62,7 @@
         </visual>
         <collision>
             <geometry>
-                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/master/src/gazebo/launch/mallet.stl" scale="0.4 0.4 0.4"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/master/src/gazebo/launch/mallet.stl" scale="0.4 0.4 0.4"/>
             </geometry>
         </collision>
     </link>
