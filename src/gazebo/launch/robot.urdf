@@ -1,53 +1,119 @@
 <robot name='robot'>
     <link name='robot/chassis'>
         <visual>
+            <origin xyz="0 0 0" rpy="1.5708 3.1416 -1.5708"/>
             <geometry>
-                <box size="2.0 1.0 0.5"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/rover_base_link.stl"/>
             </geometry>
-            <material>
-                <ambient>0.0 0.0 1.0 1</ambient>
-                <diffuse>0.0 0.0 1.0 1</diffuse>
-                <specular>0.0 0.0 1.0 1</specular>
+            <material name="rover_grey">
+                <color rgba="0.75 0.75 0.75 1"/>
             </material>
         </visual>
     </link>
 
     <link name='robot/left_wheel'>
         <visual name='visual'>
+            <origin xyz="0 0 0" rpy="0 -1.5708 1.5708"/>
             <geometry>
-                <cylinder radius="0.4" length="0.2"/>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/rover_center_left_wheel.stl"/>
             </geometry>
-            <material>
-                <ambient>1.0 0.0 0.0 1</ambient>
-                <diffuse>1.0 0.0 0.0 1</diffuse>
-                <specular>1.0 0.0 0.0 1</specular>
+            <material name="rover_grey">
+                <color rgba="0.75 0.75 0.75 1"/>
             </material>
         </visual>
     </link>
+    <joint name="left_wheel_joint" type="fixed">
+        <parent link="robot/chassis"/>
+        <child link="robot/left_wheel"/>
+        <origin xyz="0 0.48455 0" rpy="0 0 0"/>
+    </joint>
 
     <link name='robot/right_wheel'>
         <visual name='visual'>
+            <origin xyz="0 0 0" rpy="0 -1.5708 1.5708"/>
             <geometry>
-                <cylinder radius="0.4" length="0.2" />
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/rover_center_right_wheel.stl"/>
             </geometry>
-            <material>
-                <ambient>1.0 0.0 0.0 1</ambient>
-                <diffuse>1.0 0.0 0.0 1</diffuse>
-                <specular>1.0 0.0 0.0 1</specular>
+            <material name="rover_grey">
+                <color rgba="0.75 0.75 0.75 1"/>
             </material>
         </visual>
     </link>
+    <joint name="right_wheel_joint" type="fixed">
+        <parent link="robot/chassis"/>
+        <child link="robot/right_wheel"/>
+        <origin xyz="0 -0.48455 0" rpy="0 0 0"/>
+    </joint>
 
-    <link name='robot/caster'>
+    <!-- Front-left visual wheel (fixed, no physics) -->
+    <link name='robot/fl_whl'>
         <visual name='visual'>
+            <origin xyz="0 0 0.07" rpy="0 -1.5708 1.5708"/>
             <geometry>
-                <sphere radius="0.2" />
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/rover_front_left_wheel.stl"/>
             </geometry>
-            <material>
-                <ambient>0.0 1 0.0 1</ambient>
-                <diffuse>0.0 1 0.0 1</diffuse>
-                <specular>0.0 1 0.0 1</specular>
+            <material name="rover_grey">
+                <color rgba="0.75 0.75 0.75 1"/>
             </material>
         </visual>
     </link>
+    <joint name="fl_whl_joint" type="fixed">
+        <parent link="robot/chassis"/>
+        <child link="robot/fl_whl"/>
+        <origin xyz="0.40398 0.43855 0.0080468" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Front-right visual wheel -->
+    <link name='robot/fr_whl'>
+        <visual name='visual'>
+            <origin xyz="0 0 0" rpy="0 -1.5708 1.5708"/>
+            <geometry>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/rover_front_right_wheel.stl"/>
+            </geometry>
+            <material name="rover_grey">
+                <color rgba="0.75 0.75 0.75 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="fr_whl_joint" type="fixed">
+        <parent link="robot/chassis"/>
+        <child link="robot/fr_whl"/>
+        <origin xyz="0.40398 -0.43855 0.0080468" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Rear-left visual wheel -->
+    <link name='robot/rl_whl'>
+        <visual name='visual'>
+            <origin xyz="0 0 0" rpy="0 -1.5708 1.5708"/>
+            <geometry>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/rover_rear_left_wheel.stl"/>
+            </geometry>
+            <material name="rover_grey">
+                <color rgba="0.75 0.75 0.75 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="rl_whl_joint" type="fixed">
+        <parent link="robot/chassis"/>
+        <child link="robot/rl_whl"/>
+        <origin xyz="-0.39807 0.48455 0.016315" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Rear-right visual wheel -->
+    <link name='robot/rr_whl'>
+        <visual name='visual'>
+            <origin xyz="0 0 0" rpy="0 -1.5708 1.5708"/>
+            <geometry>
+                <mesh filename="https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/rover_rear_right_wheel.stl"/>
+            </geometry>
+            <material name="rover_grey">
+                <color rgba="0.75 0.75 0.75 1"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="rr_whl_joint" type="fixed">
+        <parent link="robot/chassis"/>
+        <child link="robot/rr_whl"/>
+        <origin xyz="-0.39807 -0.48455 0.016315" rpy="0 0 0"/>
+    </joint>
 </robot>

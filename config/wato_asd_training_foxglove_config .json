@@ -33,10 +33,10 @@
         "ignoreColladaUpAxis": false
       },
       "transforms": {
-        "frame:robot/right_wheel": {
+        "frame:robot/crw": {
           "visible": false
         },
-        "frame:robot/left_wheel": {
+        "frame:robot/clw": {
           "visible": false
         },
         "frame:robot/chassis/imu_sensor": {

@@ -40,14 +40,15 @@
         "enableStats": false,
         "ignoreColladaUpAxis": false,
         "transforms": {
-          "editable": true
+          "editable": true,
+          "labelSize": 0.075
         }
       },
       "transforms": {
-        "frame:robot/right_wheel": {
+        "frame:robot/crw": {
           "visible": false
         },
-        "frame:robot/left_wheel": {
+        "frame:robot/clw": {
           "visible": false
         },
         "frame:robot/chassis/imu_sensor": {
@@ -215,7 +216,7 @@
           "instanceId": "9e830917-d6fe-4f25-8e7b-25afa5a47d21",
           "layerId": "foxglove.Urdf",
           "sourceType": "url",
-          "url": "https://raw.githubusercontent.com/WATonomous/wato_rover/master/src/gazebo/launch/robot.urdf",
+          "url": "https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/robot.urdf",
           "filePath": "",
           "parameter": "",
           "topic": "",
@@ -332,10 +333,10 @@
         "frame:robot/chassis/sim_realsense_d435_color": {
           "visible": true
         },
-        "frame:robot/left_wheel": {
+        "frame:robot/clw": {
           "visible": true
         },
-        "frame:robot/right_wheel": {
+        "frame:robot/crw": {
           "visible": true
         },
         "frame:robot/chassis/sim_realsense_d435_1_color": {

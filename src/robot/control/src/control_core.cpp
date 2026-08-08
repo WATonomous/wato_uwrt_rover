@@ -138,7 +138,9 @@ geometry_msgs::msg::Twist ControlCore::calculateControlCommand(
   // Or just constant linear velocity as per prompt "make sure the robot follows the path"
 
   // Just use the configured linear velocity
-  twist.linear.x = linear_velocity_;
+  double speed_factor =
+    1.0 - (std::abs(output) / max_steering_angle_ * 0.5);  // during turns slows down to avoid overshoot
+  twist.linear.x = linear_velocity_ * speed_factor;
   twist.angular.z = output;
 
   return twist;
