@@ -1,0 +1,57 @@
+//current implementation:
+takes thin slice of 3d costmap 0.05 < z< 0.15 stamp those to 100 then inflate
+new implementation: per grid cell, how many points land in it, mean height, height variance, min/max
+
+void CostmapCore::updateFromCloud(
+  const sensor_msgs::msg::PointCloud2::SharedPtr cloud,
+  const geometry_msgs::msg::TransformStamped & sensor_to_world)
+{
+  // (1) Convert the transform ONCE, outside the loop.
+  tf2::Transform T;
+  tf2::fromMsg(sensor_to_world.transform, T);
+
+  // (2) Clear the per-cell accumulators, not a costmap.(std::vectors width_*height_)
+  //these are used to calculate step height/slop distinguish b/n obstacle and terrain
+  std::fill(count_.begin(),  count_.end(),  0);
+  std::fill(sum_z_.begin(),  sum_z_.end(),  0.0);
+  std::fill(sum_z2_.begin(), sum_z2_.end(), 0.0);
+  std::fill(min_z_.begin(),  min_z_.end(),  std::numeric_limits<float>::max());
+  std::fill(max_z_.begin(),  max_z_.end(),  std::numeric_limits<float>::lowest());
+
+
+  sensor_msgs::PointCloud2ConstIterator<float> ix(*cloud, "x"), iy(*cloud, "y"), iz(*cloud, "z");
+
+  for (; ix != ix.end(); ++ix, ++iy, ++iz) {
+    const float sx = *ix, sy = *iy, sz = *iz;
+
+    // (3) Cheap rejects FIRST, in the sensor frame, before paying for the transform.
+    if (!std::isfinite(sx) || !std::isfinite(sy) || !std::isfinite(sz)) continue;
+    const float r2 = sx * sx + sy * sy + sz * sz;
+    if (r2 < min_range_sq_ || r2 > max_range_sq_) continue;
+
+    // (4) Now transform. Height is only meaningful after this line.
+    const tf2::Vector3 p = T * tf2::Vector3(sx, sy, sz);
+
+    // (5) Ground-plane projection -> cell index.
+    int gx, gy;
+    if (!worldToMap(p.x(), p.y(), gx, gy)) continue;
+    const int idx = gy * width_ + gx;
+
+    // (6) Height gate against a REAL height now: reject ceiling/underground noise.
+    const double h = p.z();
+    if (h < min_height_ || h > max_height_) continue;
+
+    // (7) Accumulate. Do not assign.
+    count_[idx]  += 1;
+    sum_z_[idx]  += h;
+    sum_z2_[idx] += h * h;
+    min_z_[idx] = std::min(min_z_[idx], static_cast<float>(h));
+    max_z_[idx] = std::max(max_z_[idx], static_cast<float>(h));
+  }
+}
+
+
+
+which transforms need to be applied during costmap?
+-the ones that need to be applied to each point, before collapsing cloud to a 2d map
+-camera->chassis(static full 6 dof) and chassis roll/pitch vs gravity(rotation only)

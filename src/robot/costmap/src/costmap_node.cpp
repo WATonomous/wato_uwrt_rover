@@ -25,9 +25,12 @@ CostmapNode::CostmapNode()
   // load ROS2 yaml parameters
   processParameters();
 
+  //transform buffer(queue of past states) and listener
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   // Subscribe to point cloud from RGBD camera
   point_cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-    pointcloud_topic_, 10, std::bind(&CostmapNode::pointCloudCallback, this, std::placeholders::_1));
+  pointcloud_topic_, 10, std::bind(&CostmapNode::pointCloudCallback, this, std::placeholders::_1));
 
   // Keep laser scan subscription for backwards compatibility (optional)
   // laser_scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
@@ -45,7 +48,6 @@ CostmapNode::CostmapNode()
 
   RCLCPP_INFO(this->get_logger(), "Initialized Costmap Core");
 }
-
 void CostmapNode::processParameters()
 {
   // Declare all ROS2 Parameters

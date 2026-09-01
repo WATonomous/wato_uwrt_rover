@@ -22,6 +22,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
 
 class CostmapNode : public rclcpp::Node
 {
@@ -41,6 +43,11 @@ public:
   void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) const;
 
 private:
+  //for 2.5D mapping
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::string target_frame_;   // e.g. "sim_world" or "robot/chassis"
+
   robot::CostmapCore costmap_;
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_scan_sub_;
