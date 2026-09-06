@@ -45,6 +45,7 @@ CostmapNode::CostmapNode()
   RCLCPP_INFO(this->get_logger(), "Subscribed to point cloud topic: %s", pointcloud_topic_.c_str());
 
   costmap_.initCostmap(resolution_, width_, height_, origin_, inflation_radius_);
+  costmap_.setTerrainFilter(filter_);
 
   RCLCPP_INFO(this->get_logger(), "Initialized Costmap Core");
 }
@@ -61,6 +62,20 @@ void CostmapNode::processParameters()
   this->declare_parameter<double>("costmap.origin.position.y", -5.0);
   this->declare_parameter<double>("costmap.origin.orientation.w", 1.0);
   this->declare_parameter<double>("costmap.inflation_radius", 1.0);
+  //additional parameters
+  this->declare_parameter<std::string>("chassis_frame", "robot/chassis");
+  this->declare_parameter<std::string>("world_frame", "sim_world");
+  this->declare_parameter<double>("tf_timeout", 0.05);
+
+  this->declare_parameter<double>("terrain.min_range", 0.2);
+  this->declare_parameter<double>("terrain.max_range", 5.0);
+  this->declare_parameter<double>("terrain.band_low", 0.10);
+  this->declare_parameter<double>("terrain.band_high", 0.60);
+  this->declare_parameter<double>("terrain.ground_floor", -0.50);
+  this->declare_parameter<double>("terrain.band_low_slack", 0.0);
+  this->declare_parameter<int>("terrain.min_points_obstacle", 3);
+  this->declare_parameter<int>("terrain.min_points_free", 6);
+  this->declare_parameter<int>("terrain.point_stride", 1);
 
   // Retrieve parameters and store them in member variables
   laserscan_topic_ = this->get_parameter("laserscan_topic").as_string();
@@ -73,9 +88,24 @@ void CostmapNode::processParameters()
   origin_.position.y = this->get_parameter("costmap.origin.position.y").as_double();
   origin_.orientation.w = this->get_parameter("costmap.origin.orientation.w").as_double();
   inflation_radius_ = this->get_parameter("costmap.inflation_radius").as_double();
+  //additional parameters stored
+  chassis_frame_ = this->get_parameter("chassis_frame").as_string();
+  world_frame_   = this->get_parameter("world_frame").as_string();
+  tf_timeout_    = this->get_parameter("tf_timeout").as_double();
+
+  filter_.min_range           = this->get_parameter("terrain.min_range").as_double();
+  filter_.max_range           = this->get_parameter("terrain.max_range").as_double();
+  filter_.band_low            = this->get_parameter("terrain.band_low").as_double();
+  filter_.band_high           = this->get_parameter("terrain.band_high").as_double();
+  filter_.ground_floor        = this->get_parameter("terrain.ground_floor").as_double();
+  filter_.band_low_slack      = this->get_parameter("terrain.band_low_slack").as_double();
+  filter_.min_points_obstacle = this->get_parameter("terrain.min_points_obstacle").as_int();
+  filter_.min_points_free     = this->get_parameter("terrain.min_points_free").as_int();
+  filter_.point_stride        = this->get_parameter("terrain.point_stride").as_int();
+
 }
 
-void CostmapNode::laserScanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) const
+void CostmapNode::laserScanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) 
 {
   // Update the costmap according to the laser scan
   costmap_.updateCostmap(msg);
@@ -85,13 +115,39 @@ void CostmapNode::laserScanCallback(const sensor_msgs::msg::LaserScan::SharedPtr
   costmap_pub_->publish(costmap_msg);
 }
 
+bool CostmapNode::lookupTransforms(
+  const rclcpp::Time & stamp,
+  const std::string & cloud_frame,
+  geometry_msgs::msg::TransformStamped & sensor_to_chassis,
+  geometry_msgs::msg::TransformStamped & chassis_to_world)
+{
+  try{
+    //look up the transforms at specific timestamp
+    sensor_to_chassis =
+      tf_buffer_->lookupTransform(chassis_frame_, cloud_frame, stamp, timeout);
+    chassis_to_world =
+      tf_buffer_->lookupTransform(world_frame_, chassis_frame_, stamp, timeout);
+  } catch(const tf2::TransformException & ex) {
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "TF lookup failed, dropping cloud: %s", ex.what());
+    return false;
+  }
+  return true;
+}
+
 void CostmapNode::pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) const
 {
+  if(!lookupTransforms(msg->header.stamp, msg->header.frame_id,sensor_to_chassis,chassis_to_world)){
+    return;
+  }
   // Update the costmap according to the point cloud
-  costmap_.updateCostmapFromPointCloud(msg);
+  costmap_.updateCostmapFromPointCloud(msg,sensor_to_chassis,chassis_to_world);
   // publish the costmap
   nav_msgs::msg::OccupancyGrid costmap_msg = *costmap_.getCostmapData();
-  costmap_msg.header = msg->header;
+  costmap_msg.header.stamp = msg->header.stamp;
+  //change frame id because not in camera frame anymore
+  costmap_msg.header.frame_id = chassis_frame_;
   costmap_pub_->publish(costmap_msg);
 }
 

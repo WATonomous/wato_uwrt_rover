@@ -50,15 +50,11 @@ void CostmapCore::initCostmap(
   origin_x_ = origin.position.x;
   origin_y_ = origin.position.y;
 
-  count_.resize(cells);
-  sum_z_.resize(cells);
-  sum_z2_.resize(cells);
-  min_z_.resize(cells);
-  max_z_.resize(cells);
-  mean_z_.resize(cells);
+  band_count_.resize(cells);
+  ground_count_.resize(cells);
 
   inflation_radius_ = inflation_radius;
-  inflation_cells_ = static_cast<int>(std::ceil(inflation_radius / resolution));
+  inflation_cells_ = static_cast<int>(std::ceil(inflation_radius / resolution_));
 
   setTerrainFilter(filter_);
 
@@ -76,8 +72,8 @@ void CostmapCore::setTerrainFilter(const TerrainFilter & filter)
 
 bool CostmapCore::worldToMap(double wx, double wy, int & grid_x, int & grid_y) const
 {
-  grid_x = static_cast<int>(std::floor(wx-origin_x / resolution_));
-  grid_y = static_cast<int>(std::floor(yw-origin_y / resolution));
+  grid_x = static_cast<int>(std::floor((wx-origin_x_) / resolution_));
+  grid_y = static_cast<int>(std::floor((wy-origin_y_) / resolution_));
   //in grid range check
   return grid_x >= 0 && grid_x < width_ && grid_y >= 0 && grid_y < height_;
 }
@@ -88,252 +84,148 @@ bool CostmapCore::worldToMap(double wx, double wy, int & grid_x, int & grid_y) c
   wy = grid_y * resolution + origin_y;
 }
  */
+
 void CostmapCore::resetAccumulators()
 {
-  std::fill(count_.begin(), count_.end(), 0);
-  std::fill(sum_z_.begin(), sum_z_.end(), 0.0);
-  std::fill(sum_z2_.begin(), sum_z2_.end(), 0.0);
-  // Sentinels, so the first real sample wins both comparisons. Note lowest(),
-  // not FLT_MIN -- FLT_MIN is the smallest *positive* float.
-  std::fill(min_z_.begin(), min_z_.end(), std::numeric_limits<float>::max());
-  std::fill(max_z_.begin(), max_z_.end(), std::numeric_limits<float>::lowest());
+  std::fill(band_count_.begin(), band_count_.end(), 0);
+  std::fill(ground_count_.begin(), ground_count_.end(), 0);
 }
 
-/*populate the accumulators
-count - number of points in a grid index
-sum_z - sum of heights,
-sum_z - sum of heights squared
-min_z_ - the smallest height 
-min_z_ - largest height
-*/
-void CostmapCore::accumulate(
-  const sensor_msgs::msg::PointCloud2::SharedPtr & cloud,
-  const geometry_msgs::msg::TransformStamped & sensor_to_target)
+
+//full sensor to chassis transform(not sure if theres a rotation even, TEST BY LOOKING AT MESSAGES)
+//only rotation for chassis to world, and trip the yaw rotation 
+
+//combines these two transforms together
+tf2::Transform CostmapCore::makeSensorToLevel(
+    const geometry_msgs::msg::TransformStamped & sensor_to_chassis,
+    const geometry_msgs::msg::TransformStamped & chassis_to_world)
 {
-  // obtain rotation matrix from sensor to chassis frame
-  tf2::Transform sensor_to_target_tf;
-  tf2::fromMsg(sensor_to_target.transform, sensor_to_target_tf);
+  //conver
+  tf2::Transform sensor_to_chassis_tf;
+  tf2::fromMsg(sensor_to_chassis.transform,sensor_to_chassis_tf);
 
-  const int stride = std::max(1, filter_.point_stride);
+  //pitch/roll only
+  tf2::Quaternion q_cw;
+  tf2::fromMsg(chassis_to_world.transform.rotation,q_cw);
 
-  //iterators to go through each point in the point cloud
+  //extract roll/pitch/yaw
+  double roll,pitch,yaw;
+  tf2::Matrix3x3(q_cw).getRPY(roll,pitch,yaw);
+
+  //find the quat where yaw is fixed at zero
+  tf2::Quaternion q_level;
+  q_level.setRPY(roll,pitch,0.0);
+
+  //turn the above quat into a transform
+  const tf2::Transform level(q_level,tf2::Vector3(0,0,0));//builds transform rot + translate from quat and vec
+
+  return level * sensor_to_chassis_tf;
+  //L(Sv) = (LS)v, associative, now just need to multiply this transform by the point vector
+
+  //first transform 
+
+}
+
+
+
+void CostmapCore::accumulate(const sensor_msgs::msg::PointCloud2::SharedPtr & cloud,
+                  const tf2::Transform & sensor_to_level)
+{
+
+  //stride of points, how many points are we checking
+  const int stride = std::max(1,filter_.point_stride);
+  //iterators to go through each point in cloud
   sensor_msgs::PointCloud2ConstIterator<float> iter_x(*cloud, "x");
   sensor_msgs::PointCloud2ConstIterator<float> iter_y(*cloud, "y");
   sensor_msgs::PointCloud2ConstIterator<float> iter_z(*cloud, "z");
 
   int point_index = 0;
-
   //iterate through each point
-  for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z, ++point_index) {
-    if (point_index % stride != 0) {
+  for(;iter_x!=iter_x.end(); ++iter_x, ++iter_y, ++iter_z, ++point_index)
+  {
+    if(point_index%stride != 0)
+    {
       continue;
     }
 
-    //x,y,z values for point
+    //get values of xyz
+
     const float sx = *iter_x;
     const float sy = *iter_y;
     const float sz = *iter_z;
+    //before doing transforms, filter for out of range and NaN
 
-    // NaN for failed points, filter out
-    if (!std::isfinite(sx) || !std::isfinite(sy) || !std::isfinite(sz)) {
+    //range calc
+    float range_sq = sx*sx + sy*sy + sz*sz;
+
+    if(!std::isfinite(sx) || !std::isfinite(sy) || !std::isfinite(sz) || range_sq < min_range_sq_ || range_sq > max_range_sq_)
       continue;
-    }
-    const double range_sq = static_cast<double>(sx) * sx +
-                            static_cast<double>(sy) * sy +
-                            static_cast<double>(sz) * sz;
-    if (range_sq < min_range_sq_ || range_sq > max_range_sq_) {
+
+    //now apply the transformation to it
+    tf2::Vector3 newPoint = sensor_to_level * tf2::Vector3(sx,sy,sz);
+
+    //transforms are done, can calculate the index now
+
+    //apply height filter
+    float h = newPoint.z();
+
+    //if bigger just throw out, if smaller needs to be added to ground
+    if(h>filter_.band_high)
       continue;
-    }
-
-    // Into the target frame. Only past this line do x/y lie in the ground plane
-    // and z mean "height" -- in the camera's own frame they do not.
-    //transform from sensor to chassis frame, (3x3) matmul (3x1)
-    const tf2::Vector3 p = sensor_to_target_tf * tf2::Vector3(sx, sy, sz);
-
-    // A SANITY gate, not a ground classifier: this only drops the ceiling and
-    // filters out too high and too low points
-    const double h = p.z();
-    if (h < filter_.sanity_min_z || h > filter_.sanity_max_z) {
+  
+    if (h < filter_.ground_floor) 
       continue;
-    }
 
-    // Collapse 3D -> 2D: drop z, let the point vote for the cell its vertical
-    // shadow lands in, and fold its height into that cell's statistics.
-    int grid_x, grid_y;
-    if (!worldToMap(p.x(), p.y(), grid_x, grid_y)) {
+    //from worldtomap index
+    int grid_x,grid_y;
+    if(!worldToMap(newPoint.x(),newPoint.y(), grid_x, grid_y))
       continue;
-    }
-    //find associated index in the occupancy grid(y*width + x)
-    const size_t idx = static_cast<size_t>(grid_y) * width_ + grid_x;
 
-    //updating accumulators
-    if (count_[idx] < std::numeric_limits<uint16_t>::max()) {
-      ++count_[idx];
+    size_t idx =  static_cast<size_t> (grid_y)*width_ + grid_x;
+
+    if(h<filter_.band_low)
+    {
+      ground_count_[idx]++;
     }
-    sum_z_[idx] += h;
-    sum_z2_[idx] += h * h;
-    min_z_[idx] = std::min(min_z_[idx], static_cast<float>(h));
-    max_z_[idx] = std::max(max_z_[idx], static_cast<float>(h));
-  }
+    else //the point survived all the filters, add to band_count
+    {
+      band_count_[idx]++;
+    }
+
+
+  } 
 }
 
-
-bool CostmapCore::fitLocalPlane(int cx, int cy, double & a, double & b, double & c) const
-{
-  // Least squares for z = a*dx + b*dy + c, with (dx, dy) in METRES relative to
-  // the cell being classified. Centring matters: it makes `c` the fitted ground
-  // height exactly AT this cell, so the residual test needs no plane evaluation.
-  const int half = std::max(1, filter_.fit_window / 2);
-  const uint16_t min_points = static_cast<uint16_t>(std::max(1, filter_.min_points_per_cell));
-
-  // Symmetric normal-equation accumulators
-  double s_xx = 0, s_xy = 0, s_yy = 0, s_x = 0, s_y = 0, s_1 = 0;
-  double s_xz = 0, s_yz = 0, s_z = 0;
-  int used = 0;
-
-  for (int ny = std::max(0, cy - half); ny <= std::min(height_ - 1, cy + half); ++ny) {
-    for (int nx = std::max(0, cx - half); nx <= std::min(width_ - 1, cx + half); ++nx) {
-      // Exclude the centre. If an obstacle sits here, letting it into the fit
-      // would drag the ground estimate up toward the very thing we are trying
-      // to measure against.
-      if (nx == cx && ny == cy) {
-        continue;
-      }
-      const size_t n_idx = static_cast<size_t>(ny) * width_ + nx;
-      if (count_[n_idx] < min_points) {
-        continue;
-      }
-
-      const double dx = (nx - cx) * resolution_;
-      const double dy = (ny - cy) * resolution_;
-      const double z = mean_z_[n_idx];
-
-      s_xx += dx * dx;  s_xy += dx * dy;  s_x += dx;
-      s_yy += dy * dy;  s_y += dy;        s_1 += 1.0;
-      s_xz += dx * z;   s_yz += dy * z;   s_z += z;
-      ++used;
-    }
-  }
-
-  if (used < filter_.min_fit_cells) {
-    return false;  // not enough ground to say anything about
-  }
-
-  // Solve the symmetric 3x3 by Cramer's rule. A near-zero determinant means the
-  // surviving neighbours are collinear (e.g. a single row of cells along a grid
-  // edge) and no unique plane exists.
-  const double det =
-      s_xx * (s_yy * s_1 - s_y * s_y)
-    - s_xy * (s_xy * s_1 - s_y * s_x)
-    + s_x  * (s_xy * s_y - s_yy * s_x);
-
-  if (std::fabs(det) < 1e-9) {
-    return false;
-  }
-
-  a = (s_xz * (s_yy * s_1 - s_y * s_y)
-     - s_xy * (s_yz * s_1 - s_y * s_z)
-     + s_x  * (s_yz * s_y - s_yy * s_z)) / det;
-
-  b = (s_xx * (s_yz * s_1 - s_y * s_z)
-     - s_xz * (s_xy * s_1 - s_y * s_x)
-     + s_x  * (s_xy * s_z - s_yz * s_x)) / det;
-
-  c = (s_xx * (s_yy * s_z - s_yz * s_y)
-     - s_xy * (s_xy * s_z - s_yz * s_x)
-     + s_xz * (s_xy * s_y - s_yy * s_x)) / det;
-
-  return true;
-}
-
+//takes accumulators and builds a costmap using it
 void CostmapCore::classify()
 {
-  const uint16_t min_points = static_cast<uint16_t>(std::max(1, filter_.min_points_per_cell));
-  const size_t cells = count_.size();
+  const uint16_t min_obstacle =
+    static_cast<uint16_t>(std::max(1, filter_.min_points_obstacle));
+  const uint16_t min_free =
+    static_cast<uint16_t>(std::max(1, filter_.min_points_free));
 
-  // --- Stage 2: sums -> means, once, because the plane fit reads each mean
-  // up to fit_window^2 times ---
-  for (size_t i = 0; i < cells; ++i) {
-    mean_z_[i] = (count_[i] > 0) ? sum_z_[i] / count_[i] : 0.0;
-  }
-
-  // Extent that pure terrain tilt can explain across one cell, corner to corner
-  const double cell_diagonal = resolution_ * std::sqrt(2.0);
-
-  // --- Stage 4: classify ---
-  for (size_t i = 0; i < cells; ++i) {
-    // Never seen: leave unknown. map_memory skips negatives, so an unknown cell
-    // is "no opinion this frame" rather than a claim of free space.
-    if (count_[i] < min_points) {
+  for (size_t i = 0; i < costmap_data_->data.size(); ++i) {
+    if (band_count_[i] >= min_obstacle) {
+      costmap_data_->data[i] = 100;
+    } else if (ground_count_[i] >= min_free) {
+      costmap_data_->data[i] = 0;
+    } else {
       costmap_data_->data[i] = -1;
-      continue;
     }
-
-    const int cx = static_cast<int>(i) % width_;
-    const int cy = static_cast<int>(i) / width_;
-    const double extent = max_z_[i] - min_z_[i];
-
-    double a, b, c;
-    if (!fitLocalPlane(cx, cy, a, b, c)) {
-      // No local ground reference. We can still trust the cell's own vertical
-      // extent, but we must not call it free -- there is nothing to call it
-      // free relative to.
-      costmap_data_->data[i] = (extent > filter_.max_step) ? 100 : -1;
-      continue;
-    }
-
-    // TEST 1 -- is the ground itself too steep to climb?
-    const double slope = std::atan(std::hypot(a, b));
-    if (slope > filter_.max_slope) {
-      costmap_data_->data[i] = 100;
-      continue;
-    }
-
-    // TEST 2 -- does something stick up out of the LOCAL ground surface?
-    // Because the fit is centred, the ground height here is exactly `c`.
-    // This is the test that survives slope: a curb on a ramp has a high
-    // absolute height and a ramp-matching slope, but a 15 cm residual.
-    const double residual = max_z_[i] - c;
-    if (residual > filter_.max_step) {
-      costmap_data_->data[i] = 100;
-      continue;
-    }
-
-    // TEST 3 -- vertical structure inside this one cell.
-    // Covers the case tests 1 and 2 miss: a wall filling the fit window, where
-    // the means are uniformly high and flat, so the plane is level and the
-    // residual is zero. Allowance is slope-compensated, otherwise at 0.4 m
-    // cells a 20 deg ramp (0.146 m of rise) looks exactly like a 15 cm curb.
-    const double allowed_extent = filter_.max_step + std::tan(slope) * cell_diagonal;
-    if (extent > allowed_extent) {
-      costmap_data_->data[i] = 100;
-      continue;
-    }
-
-    // Traversable, but how comfortably? Height variance about the cell mean.
-    const double mean = mean_z_[i];
-    const double variance = std::max(0.0, sum_z2_[i] / count_[i] - mean * mean);
-    const double roughness = std::sqrt(variance);
-
-    const double span = std::max(1e-6, filter_.rough_lethal - filter_.rough_free);
-    const double t = std::clamp((roughness - filter_.rough_free) / span, 0.0, 1.0);
-
-    // Capped at 99: roughness must never reach 100, or inflateObstacles() would
-    // seed inflation off gravel.
-    costmap_data_->data[i] = static_cast<int8_t>(t * 99.0);
   }
 }
-
 
 void CostmapCore::updateCostmapFromPointCloud(
   const sensor_msgs::msg::PointCloud2::SharedPtr cloud,
-  const geometry_msgs::msg::TransformStamped & sensor_to_target)
+  const geometry_msgs::msg::TransformStamped & sensor_to_chassis,
+  const geometry_msgs::msg::TransformStamped & chassis_to_world
+)
 {
   // A *local* costmap: what the camera can see right now. Persistence across
   // frames is map_memory's job.
   resetAccumulators();
 
-  accumulate(cloud, sensor_to_target);
+  accumulate(cloud, makeSensorToLevel(sensor_to_chassis,chassis_to_world));
   classify();
   inflateObstacles();
 }
@@ -387,7 +279,7 @@ void CostmapCore::updateCostmap(const sensor_msgs::msg::LaserScan::SharedPtr las
 {
   // The 2D lidar path has no height information at all, so it stays a plain
   // hit-and-inflate. Everything a beam returns is by definition at beam height.
-  std::fill(costmap_data_->data.begin(), costmap_data_->data.end(), 0);
+  std::fill(costmap_data_->data.begin(), costmap_data_->data.end(), 0/0);
 
   double angle = laserscan->angle_min;
   for (size_t i = 0; i < laserscan->ranges.size(); ++i, angle += laserscan->angle_increment) {

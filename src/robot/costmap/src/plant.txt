@@ -1,57 +1,82 @@
-//current implementation:
-takes thin slice of 3d costmap 0.05 < z< 0.15 stamp those to 100 then inflate
-new implementation: per grid cell, how many points land in it, mean height, height variance, min/max
+#include "costmap/costmap_core.hpp"
 
-void CostmapCore::updateFromCloud(
-  const sensor_msgs::msg::PointCloud2::SharedPtr cloud,
-  const geometry_msgs::msg::TransformStamped & sensor_to_world)
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <vector>
+
+#include "sensor_msgs/point_cloud2_iterator.hpp"
+#include "tf2/LinearMath/Transform.h"
+#include "tf2/LinearMath/Vector3.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+
+namespace robot
 {
-  // (1) Convert the transform ONCE, outside the loop.
-  tf2::Transform T;
-  tf2::fromMsg(sensor_to_world.transform, T);
 
-  // (2) Clear the per-cell accumulators, not a costmap.(std::vectors width_*height_)
-  //these are used to calculate step height/slop distinguish b/n obstacle and terrain
-  std::fill(count_.begin(),  count_.end(),  0);
-  std::fill(sum_z_.begin(),  sum_z_.end(),  0.0);
-  std::fill(sum_z2_.begin(), sum_z2_.end(), 0.0);
-  std::fill(min_z_.begin(),  min_z_.end(),  std::numeric_limits<float>::max());
-  std::fill(max_z_.begin(),  max_z_.end(),  std::numeric_limits<float>::lowest());
+CostmapCore::CostmapCore(const rclcpp::Logger & logger)
+: costmap_data_(std::make_shared<nav_msgs::msg::OccupancyGrid>())
+, logger_(logger)
+{}
 
+void CostmapCore::initCostmap(
+  double resolution, int width, int height, geometry_msgs::msg::Pose origin, double inflation_radius)
+{
+  costmap_data_->info.resolution = resolution;
+  costmap_data_->info.width = width;
+  costmap_data_->info.height = height;
+  costmap_data_->info.origin = origin;
 
-  sensor_msgs::PointCloud2ConstIterator<float> ix(*cloud, "x"), iy(*cloud, "y"), iz(*cloud, "z");
+  const size_t cells = static_cast<size_t>(width) * height;
+  costmap_data_->data.assign(cells, -1);
 
-  for (; ix != ix.end(); ++ix, ++iy, ++iz) {
-    const float sx = *ix, sy = *iy, sz = *iz;
+  // Cached so the per-point loop touches no message fields and does no
+  // uint32 -> int conversions
+  width_ = width;
+  height_ = height;
+  resolution_ = resolution;
+  origin_x_ = origin.position.x;
+  origin_y_ = origin.position.y;
 
-    // (3) Cheap rejects FIRST, in the sensor frame, before paying for the transform.
-    if (!std::isfinite(sx) || !std::isfinite(sy) || !std::isfinite(sz)) continue;
-    const float r2 = sx * sx + sy * sy + sz * sz;
-    if (r2 < min_range_sq_ || r2 > max_range_sq_) continue;
+  count_.resize(cells);
+  sum_z_.resize(cells);
+  sum_z2_.resize(cells);
+  min_z_.resize(cells);
+  max_z_.resize(cells);
+  mean_z_.resize(cells);
 
-    // (4) Now transform. Height is only meaningful after this line.
-    const tf2::Vector3 p = T * tf2::Vector3(sx, sy, sz);
+  inflation_radius_ = inflation_radius;
+  inflation_cells_ = static_cast<int>(std::ceil(inflation_radius / resolution));
 
-    // (5) Ground-plane projection -> cell index.
-    int gx, gy;
-    if (!worldToMap(p.x(), p.y(), gx, gy)) continue;
-    const int idx = gy * width_ + gx;
+  setTerrainFilter(filter_);
 
-    // (6) Height gate against a REAL height now: reject ceiling/underground noise.
-    const double h = p.z();
-    if (h < min_height_ || h > max_height_) continue;
-
-    // (7) Accumulate. Do not assign.
-    count_[idx]  += 1;
-    sum_z_[idx]  += h;
-    sum_z2_[idx] += h * h;
-    min_z_[idx] = std::min(min_z_[idx], static_cast<float>(h));
-    max_z_[idx] = std::max(max_z_[idx], static_cast<float>(h));
-  }
+  RCLCPP_INFO(
+    logger_, "Costmap initialized with resolution: %.2f, width: %d, height: %d", resolution, width, height);
 }
 
+void CostmapCore::setTerrainFilter(const TerrainFilter & filter)
+{
+  filter_ = filter;
+  // Squared once here so the hot loop never calls sqrt()
+  min_range_sq_ = filter_.min_range * filter_.min_range;
+  max_range_sq_ = filter_.max_range * filter_.max_range;
+}
 
+bool CostmapCore::worldToMap(double wx, double wy, int & grid_x, int & grid_y) const
+{
+  // floor(), not a cast: casting truncates toward zero, which mis-bins every
+  // cell on the negative side of the origin.
+  grid_x = static_cast<int>(std::floor((wx - origin_x_) / resolution_));
+  grid_y = static_cast<int>(std::floor((wy - origin_y_) / resolution_));
+  return grid_x >= 0 && grid_x < width_ && grid_y >= 0 && grid_y < height_;
+}
 
-which transforms need to be applied during costmap?
--the ones that need to be applied to each point, before collapsing cloud to a 2d map
--camera->chassis(static full 6 dof) and chassis roll/pitch vs gravity(rotation only)
+void CostmapCore::resetAccumulators()
+{
+  std::fill(count_.begin(), count_.end(), 0);
+  std::fill(sum_z_.begin(), sum_z_.end(), 0.0);
+  std::fill(sum_z2_.begin(), sum_z2_.end(), 0.0);
+  // Sentinels, so the first real sample wins both comparisons. Note lowest(),
+  // not FLT_MIN -- FLT_MIN is the smallest *positive* float.
+  std::fill(min_z_.begin(), min_z_.end(), std::numeric_limits<float>::max());
+  std::fill(max_z_.begin(), max_z_.end(), std::numeric_limits<float>::lowest());
+}
