@@ -1,0 +1,29 @@
+state_manager_node:
+  ros__parameters:
+    # Topic carrying the authoritative rover state. Published transient-local
+    # so late-joining nodes receive the current state on connection.
+    state_topic: "/rover_state"
+
+    # Topic the node publishes a single zero Twist on when entering WAIT.
+    # Should be the same topic the drivetrain actually consumes, NOT the
+    # upstream autonomy topic, so the halt cannot be gated by anything.
+    cmd_vel_topic: "/cmd_vel"
+
+    # User-facing toggle interface. Absolute, not relative: the caller names
+    # the state it wants, so the call is safe to make without first checking
+    # the current state.
+    set_autonomy_service: "/rover/set_autonomy"  # std_srvs/SetBool
+
+    # State to boot into. Keep this WAIT unless you have a specific reason:
+    # booting into CONTROL means autonomy is live the moment the container
+    # starts, before anyone is watching.
+    initial_state: "WAIT"
+
+    # Republish rate for the current state, in Hz. Transient-local QoS already
+    # covers late joiners, so this exists to let consumers detect a dead state
+    # manager via message age. Set to 0.0 to publish only on transitions.
+    heartbeat_rate: 1.0
+
+    # Publish a zero Twist immediately on every transition into WAIT, rather
+    # than relying on downstream nodes to notice the state change.
+    halt_on_wait: true
