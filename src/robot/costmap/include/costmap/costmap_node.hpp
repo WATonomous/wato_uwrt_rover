@@ -26,6 +26,7 @@
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
+#include "tf2/exceptions.h"
 
 class CostmapNode : public rclcpp::Node
 {

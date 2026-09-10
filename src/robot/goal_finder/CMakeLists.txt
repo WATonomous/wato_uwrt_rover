@@ -30,6 +30,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(vision_msgs REQUIRED)
+find_package(rover_state_msgs REQUIRED)
 
 # Compiles source files into a library
 # A library is not executed, instead other executables can link
@@ -49,7 +50,8 @@ ament_target_dependencies(goal_finder_lib
   geometry_msgs
   nav_msgs
   tf2
-  vision_msgs)
+  vision_msgs
+  rover_state_msgs)
 
 # Create ROS2 node executable from source files
 add_executable(goal_finder_node src/goal_finder_node.cpp)

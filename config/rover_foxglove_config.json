@@ -192,7 +192,7 @@
           "planarProjectionFactor": 0,
           "color": "#ffffff"
         },
-        "/sim/realsense1/depth/points": {
+        "/camera/points": {
           "visible": true,
           "colorField": "rgb",
           "colorMode": "rgb",
@@ -216,7 +216,7 @@
           "instanceId": "9e830917-d6fe-4f25-8e7b-25afa5a47d21",
           "layerId": "foxglove.Urdf",
           "sourceType": "url",
-          "url": "https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/add-rover-urdf/src/gazebo/launch/robot.urdf",
+          "url": "https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/navigate-to-item/src/gazebo/launch/robot.urdf",
           "filePath": "",
           "parameter": "",
           "topic": "",
@@ -260,7 +260,7 @@
           "label": "URDF",
           "layerId": "foxglove.Urdf",
           "sourceType": "url",
-          "url": "https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/master/src/gazebo/launch/mars_env.urdf",
+          "url": "https://raw.githubusercontent.com/WATonomous/wato_uwrt_rover/navigate-to-item/src/gazebo/launch/mars_env.urdf",
           "filePath": "",
           "parameter": "",
           "topic": "",
@@ -464,8 +464,53 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/sim/realsense1/depth/image",
-        "calibrationTopic": "/sim/realsense1/depth/camera_info"
+        "imageTopic": "/camera/depth_image",
+        "calibrationTopic": "/camera_info"
+      }
+    },
+    "Image!1kq7v3c": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/camera/image",
+        "calibrationTopic": "/camera_info"
       }
     }
   },
@@ -485,8 +530,14 @@
       },
       "second": {
         "first": "Teleop!1rfn0xj",
-        "second": "Image!2c95gcu",
-        "direction": "column"
+        "second": {
+          "first": "Image!1kq7v3c",
+          "second": "Image!2c95gcu",
+          "direction": "column",
+          "splitPercentage": 50
+        },
+        "direction": "column",
+        "splitPercentage": 34
       },
       "direction": "row",
       "splitPercentage": 63.34763948497854

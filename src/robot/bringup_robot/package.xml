@@ -9,6 +9,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>state_manager</depend>
   <depend>odometry_spoof</depend>
   <depend>gps_sim</depend>
   <depend>imu_sim</depend>

@@ -31,6 +31,28 @@ def generate_launch_description():
     )
     ld.add_action(odom_topic_arg)
 
+    #################### State Manager Node #####################
+    # Owns the rover's WAIT / CONTROL state. Launched first so /rover_state
+    # exists (transient-local) before any autonomy node comes up looking for it.
+    state_manager_pkg_prefix = get_package_share_directory("state_manager")
+    state_manager_param_file = os.path.join(
+        state_manager_pkg_prefix, "config", "params.yaml"
+    )
+
+    state_manager_param = DeclareLaunchArgument(
+        "state_manager_param_file",
+        default_value=state_manager_param_file,
+        description="Path to config file for state manager node",
+    )
+    state_manager_node = Node(
+        package="state_manager",
+        name="state_manager_node",
+        executable="state_manager_node",
+        parameters=[LaunchConfiguration("state_manager_param_file")],
+    )
+    ld.add_action(state_manager_param)
+    ld.add_action(state_manager_node)
+
     #################### Costmap Node #####################
     costmap_pkg_prefix = get_package_share_directory("costmap")
     costmap_param_file = os.path.join(costmap_pkg_prefix, "config", "params.yaml")

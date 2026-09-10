@@ -20,6 +20,7 @@
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rover_state_msgs/msg/rover_state.hpp>
 #include <vision_msgs/msg/detection2_d_array.hpp>
 
 #include "goal_finder/goal_finder_core.hpp"
@@ -36,7 +37,13 @@ private:
     SEARCHING_FOR_OBJECT,
     MOVING_TO_OBJECT
   };
-  State state_ = State::SEARCHING_FOR_OBJECT;
+  // Substate of CONTROL. Reset to WAITING_FOR_OBJECT whenever autonomy is
+  // halted, so re-arming does not resume a search or an approach begun before
+  // the halt.
+  State state_ = State::WAITING_FOR_OBJECT;
+
+  // Fail-safe default: blocked until state_manager says otherwise.
+  bool autonomy_enabled_ = false;
 
   bool objectDetected_ = false;
   double max_angle_ = 45.0;  // assuming 90 degree FOV
@@ -48,6 +55,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr object_sub_;
+  rclcpp::Subscription<rover_state_msgs::msg::RoverState>::SharedPtr state_sub_;
   rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr goal_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr rotate_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
@@ -61,6 +69,7 @@ private:
   void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void objectCallback(const vision_msgs::msg::Detection2DArray::SharedPtr msg);
+  void stateCallback(const rover_state_msgs::msg::RoverState::SharedPtr msg);
   void timerCallback();
   double cameraToAngle(const vision_msgs::msg::BoundingBox2D & bbox);
   bool findGoalPoint(double angle);  // returns true if an occupied cell was found and fills goal_point_

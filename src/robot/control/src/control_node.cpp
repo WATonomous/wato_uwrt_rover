@@ -32,6 +32,13 @@ ControlNode::ControlNode()
   odom_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
     odom_topic_, 10, std::bind(&ControlNode::odomCallback, this, std::placeholders::_1));
 
+  // Must match state_manager's QoS exactly. A volatile subscriber will not
+  // connect to the transient-local publisher, silently and with no error.
+  const auto state_qos = rclcpp::QoS(1).transient_local().reliable();
+  state_subscriber_ = this->create_subscription<rover_state_msgs::msg::RoverState>(
+    "/rover_state", state_qos,
+    std::bind(&ControlNode::stateCallback, this, std::placeholders::_1));
+
   cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic_, 10);
 
   timer_ = this->create_wall_timer(
@@ -83,8 +90,32 @@ void ControlNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
     msg->pose.pose.orientation.w);
 }
 
+void ControlNode::stateCallback(const rover_state_msgs::msg::RoverState::SharedPtr msg)
+{
+  const bool enabled = (msg->state == rover_state_msgs::msg::RoverState::CONTROL);
+
+  if (enabled == autonomy_enabled_) {
+    return;  // heartbeat, not a transition
+  }
+  autonomy_enabled_ = enabled;
+
+  RCLCPP_INFO(
+    this->get_logger(), "Autonomy %s (%s)", enabled ? "enabled" : "halted", msg->reason.c_str());
+
+  if (!enabled) {
+    // Drop the path so re-arming does not resume following a stale one.
+    control_.updatePath(nav_msgs::msg::Path());
+  }
+}
+
 void ControlNode::followPath()
 {
+  // Blocked in WAIT. The rover is held stopped by the state manager's halt and
+  // by the cmd_vel gate, not from here.
+  if (!autonomy_enabled_) {
+    return;
+  }
+
   if (control_.isPathEmpty()) {
     RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 3000, "Path is empty. Waiting for new path.");
     // Publish stop command to halt the robot

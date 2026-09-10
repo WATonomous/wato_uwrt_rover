@@ -279,7 +279,7 @@ void CostmapCore::updateCostmap(const sensor_msgs::msg::LaserScan::SharedPtr las
 {
   // The 2D lidar path has no height information at all, so it stays a plain
   // hit-and-inflate. Everything a beam returns is by definition at beam height.
-  std::fill(costmap_data_->data.begin(), costmap_data_->data.end(), 0/0);
+  std::fill(costmap_data_->data.begin(), costmap_data_->data.end(), 0.0);
 
   double angle = laserscan->angle_min;
   for (size_t i = 0; i < laserscan->ranges.size(); ++i, angle += laserscan->angle_increment) {

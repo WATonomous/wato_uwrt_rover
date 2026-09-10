@@ -27,6 +27,13 @@ GoalFinderNode::GoalFinderNode()
   object_sub_ = this->create_subscription<vision_msgs::msg::Detection2DArray>(
     "/yolo_detections", 10, std::bind(&GoalFinderNode::objectCallback, this, std::placeholders::_1));
 
+  // Must match state_manager's QoS exactly. A volatile subscriber will not
+  // connect to the transient-local publisher, silently and with no error.
+  const auto state_qos = rclcpp::QoS(1).transient_local().reliable();
+  state_sub_ = this->create_subscription<rover_state_msgs::msg::RoverState>(
+    "/rover_state", state_qos,
+    std::bind(&GoalFinderNode::stateCallback, this, std::placeholders::_1));
+
   goal_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/goal_point", 10);
 
   rotate_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
@@ -45,8 +52,30 @@ void GoalFinderNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   robot_pose_ = *msg;
 }
 
+void GoalFinderNode::stateCallback(const rover_state_msgs::msg::RoverState::SharedPtr msg)
+{
+  const bool enabled = (msg->state == rover_state_msgs::msg::RoverState::CONTROL);
+
+  if (enabled == autonomy_enabled_) {
+    return;  // heartbeat, not a transition
+  }
+  autonomy_enabled_ = enabled;
+
+  RCLCPP_INFO(
+    this->get_logger(), "Autonomy %s (%s)", enabled ? "enabled" : "halted", msg->reason.c_str());
+
+  // The internal states are substates of CONTROL: arming starts a fresh
+  // search, halting abandons whatever search or approach was in progress.
+  state_ = enabled ? State::SEARCHING_FOR_OBJECT : State::WAITING_FOR_OBJECT;
+}
+
 void GoalFinderNode::objectCallback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
 {
+  // Blocked in WAIT: this callback commits a goal, not just computes one.
+  if (!autonomy_enabled_) {
+    return;
+  }
+
   if (state_ != State::SEARCHING_FOR_OBJECT) {
     return;
   }
@@ -89,6 +118,11 @@ void GoalFinderNode::objectCallback(const vision_msgs::msg::Detection2DArray::Sh
 
 void GoalFinderNode::timerCallback()
 {
+  // Blocked in WAIT: this callback publishes the search-rotate twist.
+  if (!autonomy_enabled_) {
+    return;
+  }
+
   if (state_ == State::SEARCHING_FOR_OBJECT) {
     geometry_msgs::msg::Twist twist;
     twist.linear.x = 0.0;

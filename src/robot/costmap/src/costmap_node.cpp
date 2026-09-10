@@ -121,12 +121,11 @@ bool CostmapNode::lookupTransforms(
   geometry_msgs::msg::TransformStamped & sensor_to_chassis,
   geometry_msgs::msg::TransformStamped & chassis_to_world)
 {
+  const rclcpp::Duration timeout = rclcpp::Duration::from_seconds(tf_timeout_);
   try{
     //look up the transforms at specific timestamp
-    sensor_to_chassis =
-      tf_buffer_->lookupTransform(chassis_frame_, cloud_frame, stamp, timeout);
-    chassis_to_world =
-      tf_buffer_->lookupTransform(world_frame_, chassis_frame_, stamp, timeout);
+      sensor_to_chassis = tf_buffer_->lookupTransform(chassis_frame_, cloud_frame, stamp, timeout);
+      chassis_to_world = tf_buffer_->lookupTransform(world_frame_, chassis_frame_, stamp, timeout);
   } catch(const tf2::TransformException & ex) {
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
@@ -136,8 +135,10 @@ bool CostmapNode::lookupTransforms(
   return true;
 }
 
-void CostmapNode::pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) const
+void CostmapNode::pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
 {
+  geometry_msgs::msg::TransformStamped sensor_to_chassis;
+  geometry_msgs::msg::TransformStamped chassis_to_world;
   if(!lookupTransforms(msg->header.stamp, msg->header.frame_id,sensor_to_chassis,chassis_to_world)){
     return;
   }
@@ -145,6 +146,7 @@ void CostmapNode::pointCloudCallback(const sensor_msgs::msg::PointCloud2::Shared
   costmap_.updateCostmapFromPointCloud(msg,sensor_to_chassis,chassis_to_world);
   // publish the costmap
   nav_msgs::msg::OccupancyGrid costmap_msg = *costmap_.getCostmapData();
+  //keep the same timestamp because we need it to align with memorymap
   costmap_msg.header.stamp = msg->header.stamp;
   //change frame id because not in camera frame anymore
   costmap_msg.header.frame_id = chassis_frame_;

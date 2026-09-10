@@ -129,7 +129,7 @@ void MapMemoryCore::decayMap(double decay_factor)
     for (unsigned int x = 0; x < global_map_->info.width; x++) {
       int idx = y * global_map_->info.width + x;
       int cost = static_cast<int>(global_map_->data[idx]);
-      if (cost == -1) return;
+      if (cost == -1) continue;
       global_map_->data[idx] *= decay_factor;
     }
   }

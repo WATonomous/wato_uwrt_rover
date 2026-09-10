@@ -22,6 +22,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rover_state_msgs/msg/rover_state.hpp"
 
 class ControlNode : public rclcpp::Node
 {
@@ -47,12 +48,19 @@ public:
   void timerCallback();
 
 private:
+  // Latches the rover's WAIT / CONTROL state published by state_manager.
+  void stateCallback(const rover_state_msgs::msg::RoverState::SharedPtr msg);
+
   robot::ControlCore control_;
 
   // Subscriber and Publisher
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscriber_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscriber_;
+  rclcpp::Subscription<rover_state_msgs::msg::RoverState>::SharedPtr state_subscriber_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
+
+  // Fail-safe default: blocked until state_manager says otherwise.
+  bool autonomy_enabled_ = false;
 
   // Timer
   rclcpp::TimerBase::SharedPtr timer_;

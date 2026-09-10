@@ -34,6 +34,12 @@ PlannerNode::PlannerNode()
   odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
     odom_topic_, 10, std::bind(&PlannerNode::odomCallback, this, std::placeholders::_1));
 
+  // Must match state_manager's QoS exactly. A volatile subscriber will not
+  // connect to the transient-local publisher, silently and with no error.
+  const auto state_qos = rclcpp::QoS(1).transient_local().reliable();
+  state_sub_ = this->create_subscription<rover_state_msgs::msg::RoverState>(
+    "/rover_state", state_qos, std::bind(&PlannerNode::stateCallback, this, std::placeholders::_1));
+
   // Publisher
   path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_topic_, 10);
 
@@ -82,8 +88,34 @@ void PlannerNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   }
 }
 
+void PlannerNode::stateCallback(const rover_state_msgs::msg::RoverState::SharedPtr msg)
+{
+  const bool enabled = (msg->state == rover_state_msgs::msg::RoverState::CONTROL);
+
+  if (enabled == autonomy_enabled_) {
+    return;  // heartbeat, not a transition
+  }
+  autonomy_enabled_ = enabled;
+
+  RCLCPP_INFO(
+    this->get_logger(), "Autonomy %s (%s)", enabled ? "enabled" : "halted", msg->reason.c_str());
+
+  if (!enabled) {
+    // Drop the active goal so re-arming does not resume planning toward a
+    // target chosen before the halt. Cleared directly rather than through
+    // resetGoal(), which would publish a path while in WAIT.
+    active_goal_ = false;
+  }
+}
+
 void PlannerNode::goalCallback(const geometry_msgs::msg::PointStamped::SharedPtr goal_msg)
 {
+  // Do not accept goals in WAIT; accepting one would commit state that
+  // outlives the halt.
+  if (!autonomy_enabled_) {
+    return;
+  }
+
   if (active_goal_) {
     RCLCPP_WARN(this->get_logger(), "Ignoring new goal; a goal is already active.");
     return;
@@ -137,6 +169,13 @@ void PlannerNode::timerCallback()
 
 void PlannerNode::publishPath()
 {
+  // Blocked in WAIT. Guarded here rather than in the timer because every path
+  // publish routes through this function - mapCallback and goalCallback both
+  // call it directly.
+  if (!autonomy_enabled_) {
+    return;
+  }
+
   if (!have_odom_) {
     RCLCPP_WARN(this->get_logger(), "No odometry received yet. Cannot plan.");
     resetGoal();

@@ -24,6 +24,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "planner/planner_core.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rover_state_msgs/msg/rover_state.hpp"
 
 class PlannerNode : public rclcpp::Node
 {
@@ -41,12 +42,19 @@ public:
   void resetGoal();
 
 private:
+  // Latches the rover's WAIT / CONTROL state published by state_manager.
+  void stateCallback(const rover_state_msgs::msg::RoverState::SharedPtr msg);
+
   robot::PlannerCore planner_;
 
   // Subscriptions
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr goal_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<rover_state_msgs::msg::RoverState>::SharedPtr state_sub_;
+
+  // Fail-safe default: blocked until state_manager says otherwise.
+  bool autonomy_enabled_ = false;
 
   // Publisher
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;

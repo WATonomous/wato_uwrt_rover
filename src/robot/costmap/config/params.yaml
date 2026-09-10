@@ -1,18 +1,30 @@
 costmap_node:
   ros__parameters:
-    laserscan_topic: "/lidar" # laserscan topic with which costmap node subscribes to
-    costmap_topic: "/costmap" # occupancy grid topic with which costmap node publishes the costmap to
+    pointcloud_topic: "/camera/points"
+    costmap_topic: "/costmap"
+    chassis_frame: "robot/chassis"
+    world_frame: "sim_world"
+    tf_timeout: 0.05
 
+    terrain:
+      min_range: 0.5
+      max_range: 15.0
+      band_low: 0.10
+      band_high: 0.60
+      ground_floor: -1.5
+      band_low_slack: 0.0
+      min_points_obstacle: 3
+      min_points_free: 6
+      point_stride: 1
+  
     costmap:
       resolution: 0.40
       width: 120
       height: 120
-
       origin:
         position:
-          x: -24.0 # given by -1 * width * resolution / 2
-          y: -24.0 # given by -1 * height * resolution / 2
+          x: -24.0
+          y: -24.0
         orientation:
           w: 1.0
-
-      inflation_radius: 1.5
+      inflation_radius: 0.5
