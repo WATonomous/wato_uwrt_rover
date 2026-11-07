@@ -36,7 +36,7 @@ PathTreeConfig treeConfig()
 
 CostConfig costConfig()
 {
-  return {8.0 * M_PI / 180.0, 22.0 * M_PI / 180.0, 0.12, 0.30, 4.0};
+  return {8.0 * M_PI / 180.0, 22.0 * M_PI / 180.0, 3.0, 0.12, 0.30, 4.0};
 }
 
 TEST(PathTree, GeometryAndCommitSegment)
@@ -95,7 +95,7 @@ TEST(OrbitalCost, SlopeThresholds)
     for (int i = 0; i < 20; ++i) dem.at(i, j) = static_cast<float>(i * 0.25 * std::tan(30.0 * M_PI / 180.0));
   }
   const Grid<float> steep = orbitalCost(dem, costConfig());
-  EXPECT_TRUE(std::isinf(steep.at(5, 5)));
+  EXPECT_FLOAT_EQ(steep.at(5, 5), 3.0f);  // steep is costly, not forbidden
   EXPECT_TRUE(std::isinf(steep.at(0, 5)));  // edges always lethal
 
   const Grid<float> flat = orbitalCost(Grid<float>(0.25, 0.0, 0.0, 20, 20, 1.0f), costConfig());

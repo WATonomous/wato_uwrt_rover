@@ -368,7 +368,8 @@ def stamp_pebbles(rng, image, count, min_r, max_r, strength):
         image[rows, cols] += shade * disk
 
 
-def make_texture(rng, n, base_rgb, contrast, slope, pebbles, ripple=0.0):
+def make_texture(rng, n, base_rgb, contrast, slope, pebbles, pebble_radius, ripple):
+    """Seamless tile: tonal noise + optional ripples + pebbles (radius in pixels)."""
     tone = contrast * periodic_noise(rng, n, slope)
     if ripple > 0.0:
         x = np.arange(n) / n
@@ -379,7 +380,7 @@ def make_texture(rng, n, base_rgb, contrast, slope, pebbles, ripple=0.0):
             * (x[None, :] + 0.05 * np.sin(2.0 * math.pi * 3.0 * x[:, None]))
         )
     if pebbles:
-        stamp_pebbles(rng, tone, pebbles, 1, max(2, n // 400), 0.35)
+        stamp_pebbles(rng, tone, pebbles, 1, pebble_radius, 0.35)
     rgb = np.clip(
         np.array(base_rgb)[None, None, :] * (1.0 + tone[:, :, None]), 0.0, 1.0
     )
@@ -780,13 +781,15 @@ def main():
     )
     surfaces.append(("rocks", "rock"))
 
-    make_texture(rng, tex["soil_px"], (0.62, 0.40, 0.26), 0.30, 1.4, 6000).save(
+    make_texture(rng, tex["soil_px"], (0.62, 0.40, 0.26), 0.30, 1.4, 6000, 5, 0.0).save(
         os.path.join(mesh_dir, "terrain.jpg"), quality=90
     )
+    # Sand stays lighter and smoother than soil, but with ripples and grains a few
+    # centimetres across so visual odometry (and so slip detection) still works on it.
     make_texture(
-        rng, tex["sand_px"], (0.76, 0.57, 0.40), 0.06, 1.8, 0, ripple=0.04
+        rng, tex["sand_px"], (0.76, 0.57, 0.40), 0.14, 1.5, 1500, 6, 0.06
     ).save(os.path.join(mesh_dir, "sand.jpg"), quality=90)
-    make_texture(rng, tex["rock_px"], (0.42, 0.34, 0.29), 0.28, 1.2, 400).save(
+    make_texture(rng, tex["rock_px"], (0.42, 0.34, 0.29), 0.28, 1.2, 400, 2, 0.0).save(
         os.path.join(mesh_dir, "rocks.jpg"), quality=90
     )
     with open(os.path.join(terrain_dir, "model.sdf"), "w") as f:

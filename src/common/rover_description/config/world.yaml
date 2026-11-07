@@ -34,7 +34,7 @@ dunes:
     yaw_deg: -45.0
     length: 16.0
     sigma: 2.2
-    height: 1.2  # max slope ~18 deg: under the ACE tilt limit, above what sand friction allows
+    height: 1.0  # max slope ~15 deg: well under the ACE tilt limit, above what sand friction allows
 
 rocks:
   min_diameter: 0.15
@@ -61,7 +61,7 @@ spawn:
 
 friction:
   soil: 0.9
-  sand: 0.25
+  sand: 0.18  # slips on sand slopes above ~10 deg
   rock: 0.9
 
 orbital:

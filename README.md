@@ -26,7 +26,9 @@ A ROS 2 navigation stack that works the way NASA's Perseverance rover navigates,
    ./watod up
    ```
 
-   The first build takes a while: it pulls `ros:humble-ros-base`, installs Ignition Fortress and generates the Mars world. `PLATFORM="local"` in `watod-config.sh` uses a public base image, so no GHCR login is needed. Set it to `arm64`/`amd64` to use the WATonomous images instead.
+   The first build takes a while: it pulls `ros:humble-ros-base`, installs Ignition Fortress and generates the Mars world.
+   - `PLATFORM="local"` in `watod-config.sh` uses a public base image, so no GHCR login is needed. Set it to `arm64`/`amd64` to use the WATonomous images instead.
+   - Without a GHCR login, the build prints `failed to configure registry cache importer ... 403`. That is only the optional remote build cache; the build continues.
 3. Watch it:
    - **Foxglove**: open [Foxglove](https://app.foxglove.dev), *Open connection* → `ws://localhost:<FOXGLOVE_BRIDGE_PORT>` (the port is in `modules/.env`), then *Import layout* → `config/rover_foxglove_config.json`.
    - **Gazebo**: open [app.gazebosim.org/visualization](https://app.gazebosim.org/visualization) and connect to `ws://localhost:<GAZEBO_PORT>`.
@@ -41,7 +43,7 @@ SCENARIO=sand_trap ./watod up
 | --- | --- |
 | `traverse` | ~120 m loop over six waypoints: route planning around craters, odometry drift and orbital fixes. The dune is a ground-planned keep-out zone. |
 | `rock_field` | Straight into a dense rock field: ACE threads between rocks it cannot straddle. |
-| `sand_trap` | Up a sand dune that ACE accepts (18° slope) but the sand is too loose to climb: slip detection stops the rover, it backs out, marks the hazard and routes around. |
+| `sand_trap` | A goal on the sandy flank of a dune (~14–15° there, which ACE accepts) with no keep-out zone. The sand is meant to be too loose to climb, so slip detection should stop the rover, then it backs out and marks the hazard. See *Simulation notes*: in Gazebo the sand has not actually cost the rover traction so far. |
 
 ## Operating the rover
 
@@ -79,7 +81,7 @@ flowchart LR
 
 - **Terrain**: smooth spectral-noise plains, craters with rims, a sand dune, and a flattened landing pad. Meshes are split into tiles because the renderer uses 16-bit vertex indices.
 - **Rocks**: sizes drawn from the Golombek rock-abundance model used for Mars landing-site hazard analysis, with a dense rock field and a few boulders.
-- **Surfaces**: soil, sand and rock each have their own friction. Sand friction (0.25) is lower than the dune slope needs, which makes the sand trap.
+- **Surfaces**: soil, sand and rock each have their own friction. Sand is set to 0.18, which should be lower than the dune's steepest slope (~15°) needs; that is the intended sand trap.
 - **Textures**: textured for visual odometry (Mars colors, pebbles, sand ripples), with Mars gravity and a sun that matches the sun sensor.
 - **Orbital DEM**: a 25 cm/px map of the same terrain, blurred and noisy like a HiRISE product. The rover's only global reference.
 - **Rover model**: a rocker-bogie rover with a differential (a small Gazebo plugin in `src/sim/rover_sim`), a mast navcam and an IMU.
@@ -91,7 +93,7 @@ flowchart LR
   - Wheel odometry is integrated as it arrives.
   - When a visual odometry frame covers an interval, its translation replaces the wheel motion over that interval, as Perseverance does.
   - With all wheels still, VO is ignored (zero-velocity update).
-- **Slip**: `1 − VO distance / wheel distance` over the last 0.6 m driven.
+- **Slip**: `1 − VO forward distance / wheel forward distance` over the last 0.6 m driven, signed. 0 is clean rolling, 1 is wheels spinning in place, above 1 is sliding back while the wheels drive forward.
 - **Global fixes**: every 8 m, the local height map is matched against the orbital DEM.
   - Both are detrended (best-fit plane removed) and compared by normalized cross-correlation over ±2 m and ±3°.
   - A match must be distinct: `(1 − runner_up) ≥ 2 (1 − best)` for any peak 1 m or more away.
@@ -120,13 +122,25 @@ Each cycle (2 Hz), while the rover is still driving the previous arc:
 
 | Fault | Trigger |
 | --- | --- |
-| Tilt | roll/pitch beyond 25° |
-| Suspension | rocker or bogie near its hard stop |
-| Slip | slip estimate above 60 % |
+| Tilt | roll/pitch beyond 25° for 0.5 s |
+| Suspension | rocker or bogie near its hard stop for 0.5 s (a bump off a rock edge is ignored) |
+| Slip | slip magnitude above 60 %: spinning in place, or sliding |
 | Stall | commanded wheel turning, measured wheel not, for 2 s |
 | No safe path | ENav found no safe path for 10 cycles in a row |
 
-On a fault the rover stops. With `auto_recover`, slip, suspension and stall faults make it back out 1 m and report a 1 m keep-out zone to ENav. A no-safe-path fault triggers a panorama.
+On a fault the rover stops. With `auto_recover`, slip, suspension and stall faults make it back out 1 m and report a 1.5 m keep-out zone to ENav. A no-safe-path fault triggers a panorama. After `max_recoveries` attempts it waits for the ground. 30 s of fault-free driving restores the budget.
+
+## Measured results
+
+Simulation runs on an Apple M1 (Docker Desktop, software rendering). Errors are against Gazebo ground truth from the `eval` node.
+
+| Scenario | Outcome |
+| --- | --- |
+| `traverse` | **All 6 waypoints reached**, 162.7 m in ~14 min of sim time. **One slip fault** (61 %): stopped, backed out, routed around. Final estimate error 0.20 m (0.02–0.9 m along the way). Odometry alone drifted 1.07 m (0.7 % of distance). Planning ~16 ms per cycle. |
+| `rock_field` | Goal reached through the dense rock field, 32.4 m, no faults. Final estimate error 0.12 m, odometry alone 0.45 m (1.4 %). Run with `./watod up`. |
+| `sand_trap` | Both waypoints reached with no faults: the sand did not cost traction in Gazebo (see *Simulation notes*). |
+
+Across runs, odometry alone (wheels + VO) drifts roughly 0.5–3 % of distance driven. The deliberate 0.9 m landing-site error is removed by the first orbital fix, during the startup panorama.
 
 ## Development
 
@@ -158,5 +172,10 @@ Unit tests cover ACE (including a check that the bounds contain every exact conf
 - Gazebo renders the camera in software inside Docker on a Mac, so the navcam is 320×240 at 5 Hz. That keeps the simulator at real time with about 2.5 CPU cores. Everything uses sim time, so a slower machine only slows the run down.
 - Depth comes straight from Gazebo's RGB-D camera instead of stereo matching.
 - The sun sensor and the `eval` node read Gazebo ground truth (`/sim/*`). Nothing else does.
-- Gazebo's wheel model has no sinkage, and its velocity-controlled wheels never stall. Slip comes from friction, and stall detection only matters on hardware.
+- Gazebo's diff drive commands wheel velocities with no torque limit, so wheels never stall in sim; stall detection matters on hardware.
+  - A torque limit was tried. Wheels then saturate while skid-turning in place, and the drive reaction winds the bogies onto their stops.
+- There is no sinkage, and in testing the sand's lower friction did not stop the rover climbing the dune: it stood on ~14° sand without sliding.
+  - So the sand trap does not yet produce slip in simulation.
+  - Slip detection (spin, slide back, slide forward) is covered by unit tests, and `/localization/slip` is live.
+  - On hardware, or with a wheel–soil model, the same fault path applies.
 - Teleporting the rover with Gazebo's `set_pose` service freezes camera rendering; restart the simulator instead.

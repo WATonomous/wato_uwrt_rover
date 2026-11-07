@@ -79,8 +79,9 @@ Fault FaultMonitor::update(const FaultInputs & in, const Checks & checks, std::s
              format(" (limits %.2f, %.2f)", limits_.rocker, limits_.bogie);
     return Fault::kSuspension;
   }
-  if (checks.slip && in.slip && *in.slip > limits_.slip) {
-    detail = format("slip %.0f%% > %.0f%%", *in.slip * 100.0, limits_.slip * 100.0);
+  // Spinning in place (slip -> 1), sliding back (> 1) and sliding forward (< 0) all count.
+  if (checks.slip && in.slip && std::abs(*in.slip) > limits_.slip) {
+    detail = format("slip %.0f%%, limit %.0f%%", *in.slip * 100.0, limits_.slip * 100.0);
     return Fault::kSlip;
   }
   for (size_t k = 0; k < 6; ++k) {

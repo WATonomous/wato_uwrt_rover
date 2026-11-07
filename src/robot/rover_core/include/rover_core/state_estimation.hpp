@@ -82,8 +82,8 @@ public:
 
   struct VoUpdate
   {
-    double wheel_distance;  // |forward wheel distance| over the interval
-    double vo_distance;  // |VO translation| over the interval
+    double wheel_distance;  // signed forward wheel distance over the interval
+    double vo_distance;  // signed forward VO translation over the interval
   };
 
   // Replace the wheel motion over [t0, t1] with a VO translation expressed in base_link at
@@ -118,7 +118,9 @@ private:
   double variance_{0.0};
 };
 
-// Slip over a sliding window of VO intervals: 1 - vo_distance / wheel_distance.
+// Slip over a sliding window of VO intervals: 1 - vo_distance / wheel_distance, both signed
+// forward distances. 0 = rolling cleanly, 1 = wheels spinning in place, > 1 = sliding back
+// while the wheels drive forward, < 0 = sliding forward faster than the wheels turn.
 class SlipEstimator
 {
 public:

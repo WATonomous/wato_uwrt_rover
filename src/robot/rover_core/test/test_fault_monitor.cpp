@@ -75,6 +75,8 @@ TEST(FaultMonitor, SlipOnlyWhenChecked)
   in.slip = 0.8;
   EXPECT_EQ(m.update(in, {false, true}, detail), Fault::kNone);
   EXPECT_EQ(m.update(in, kAll, detail), Fault::kSlip);
+  in.slip = -0.9;  // sliding forward, faster than the wheels turn
+  EXPECT_EQ(m.update(in, kAll, detail), Fault::kSlip);
 }
 
 TEST(FaultMonitor, StallNeedsToPersist)

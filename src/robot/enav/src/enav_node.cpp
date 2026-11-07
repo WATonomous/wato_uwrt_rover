@@ -115,10 +115,11 @@ public:
     footprint_radius_ = declare_parameter("footprint_radius", 1.2);
     goal_tolerance_ = declare_parameter("goal_tolerance", 1.0);
     max_ace_paths_ = declare_parameter("max_ace_paths", 400);
-    hazard_radius_ = declare_parameter("hazard_radius", 1.0);
+    hazard_radius_ = declare_parameter("hazard_radius", 1.5);
     cost_ = {
       declare_parameter("slope_free_deg", 8.0) * M_PI / 180.0,
-      declare_parameter("slope_lethal_deg", 22.0) * M_PI / 180.0,
+      declare_parameter("slope_max_deg", 22.0) * M_PI / 180.0,
+      declare_parameter("steep_cost", 3.0),
       declare_parameter("step_free", 0.12),
       declare_parameter("step_lethal", 0.50),
       declare_parameter("cost_weight", 4.0)};

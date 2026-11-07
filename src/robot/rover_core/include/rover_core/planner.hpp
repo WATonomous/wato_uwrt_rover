@@ -64,7 +64,8 @@ std::vector<CandidatePath> buildPathTree(const PathTreeConfig & cfg);
 struct CostConfig
 {
   double slope_free;  // rad, slopes below this cost nothing
-  double slope_lethal;  // rad, slopes above this are forbidden
+  double slope_max;  // rad, cost rises linearly from 0 at slope_free to 1 here
+  double steep_cost;  // cost of slopes above slope_max (high, but not forbidden)
   double step_free;  // m, local height steps below this cost nothing
   double step_lethal;  // m, local height steps above this are forbidden
   double cost_weight;  // traversal cost per metre = 1 + cost_weight * cell cost

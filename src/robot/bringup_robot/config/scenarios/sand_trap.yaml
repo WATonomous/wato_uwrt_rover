@@ -1,11 +1,14 @@
 ---
-# No keep-out on the dune: its slope passes ACE, but the sand is too loose to climb.
-# Slip detection should stop the rover; auto-recovery backs out, marks the hazard and
-# ENav routes around the dune.
+# A goal on the sandy flank of the dune (~14-15 deg there; ACE accepts up to 20 deg) with no
+# keep-out zone. Sand friction is set low enough that the wheels should slip; slip detection
+# would then stop the rover, back it out and mark a keep-out zone. Note: in Gazebo the sand has
+# not cost the rover traction in testing (see README, Simulation notes), so this run usually
+# just reaches the goal. The first waypoint skirts the rock field to the west.
 enav:
   ros__parameters:
-    waypoints: [-2.0, -4.0, 14.0, 8.0]
+    waypoints: [-14.0, 0.0, 5.0, -1.0]
 
 mobility:
   ros__parameters:
     auto_recover: true
+    max_recoveries: 6

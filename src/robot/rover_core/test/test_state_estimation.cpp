@@ -127,5 +127,20 @@ TEST(SlipEstimator, NeedsDistanceAndForgetsOldSamples)
   EXPECT_FALSE(slip.slip(100.0).has_value());
 }
 
+TEST(SlipEstimator, SlidingBackIsNotRollingFine)
+{
+  // Wheels drive 0.3 m forward while the rover slides 0.3 m back: as large as distances go,
+  // but slip must be 2, not 0.
+  SlipEstimator slip(0.5, 0.2, 5.0);
+  slip.add(1.0, 0.3, -0.3);
+  ASSERT_TRUE(slip.slip(1.0).has_value());
+  EXPECT_NEAR(*slip.slip(1.0), 2.0, 1e-9);
+
+  // Backing out cleanly: both negative, no slip.
+  SlipEstimator backing(0.5, 0.2, 5.0);
+  backing.add(1.0, -0.3, -0.3);
+  EXPECT_NEAR(*backing.slip(1.0), 0.0, 1e-9);
+}
+
 }  // namespace
 }  // namespace rover_core

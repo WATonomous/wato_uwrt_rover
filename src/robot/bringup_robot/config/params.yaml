@@ -41,9 +41,10 @@ enav:
     plan_rate: 2.0
     goal_tolerance: 1.0
     max_ace_paths: 400
-    hazard_radius: 1.0
+    hazard_radius: 1.5  # keep-out radius around a hazard reported by a mobility fault
     slope_free_deg: 8.0
-    slope_lethal_deg: 22.0
+    slope_max_deg: 22.0  # orbital slope cost rises to 1 here
+    steep_cost: 3.0  # steeper than slope_max: very costly, not forbidden (ACE decides)
     # Route cost only: rocks the rover might straddle are costly, boulders are forbidden.
     # ACE makes the actual "can I drive over this" decision.
     step_free: 0.12

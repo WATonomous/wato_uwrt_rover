@@ -80,8 +80,14 @@ Grid<float> orbitalCost(const Grid<float> & dem, const CostConfig & cfg)
       const double gx = (dem.at(i + 1, j) - dem.at(i - 1, j)) / (2.0 * dem.resolution);
       const double gy = (dem.at(i, j + 1) - dem.at(i, j - 1)) / (2.0 * dem.resolution);
       const double slope = std::atan(std::hypot(gx, gy));
-      if (!std::isfinite(slope) || slope > cfg.slope_lethal) continue;
-      cost.at(i, j) = static_cast<float>(std::max(0.0, (slope - cfg.slope_free) / (cfg.slope_lethal - cfg.slope_free)));
+      if (!std::isfinite(slope)) continue;
+      // Steep in the coarse, blurred DEM is very costly but not forbidden: forbidding it can
+      // fence the rover inside a crater. ACE, on the rover's own height map, decides.
+      if (slope > cfg.slope_max) {
+        cost.at(i, j) = static_cast<float>(cfg.steep_cost);
+        continue;
+      }
+      cost.at(i, j) = static_cast<float>(std::max(0.0, (slope - cfg.slope_free) / (cfg.slope_max - cfg.slope_free)));
     }
   }
   return cost;

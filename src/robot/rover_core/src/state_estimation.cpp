@@ -109,7 +109,9 @@ std::optional<DeadReckoning::VoUpdate> DeadReckoning::applyVisualOdometry(
 
   // Earlier corrections shifted e0 and e1 together, so their difference is wheel motion only.
   const Eigen::Vector3d correction = e0.attitude * translation - (e1.position - e0.position);
-  const VoUpdate update{std::abs(e1.distance - e0.distance), translation.norm()};
+  // Signed forward progress: a rover sliding back while its wheels drive forward must not
+  // look like a rover that is moving fine.
+  const VoUpdate update{e1.distance - e0.distance, translation.x()};
   for (size_t i = i1; i < history_.size(); ++i) history_[i].position += correction;
   position_ += correction;
   return update;
@@ -121,7 +123,9 @@ void SlipEstimator::add(double stamp, double wheel_distance, double vo_distance)
   // Keep the newest samples that make up the window distance.
   double total = 0.0;
   size_t keep = 0;
-  for (auto it = samples_.rbegin(); it != samples_.rend() && total < window_distance_; ++it, ++keep) total += it->wheel;
+  for (auto it = samples_.rbegin(); it != samples_.rend() && total < window_distance_; ++it, ++keep) {
+    total += std::abs(it->wheel);
+  }
   while (samples_.size() > keep) samples_.pop_front();
 }
 
@@ -134,7 +138,7 @@ std::optional<double> SlipEstimator::slip(double now) const
     wheel += s.wheel;
     vo += s.vo;
   }
-  if (wheel < min_distance_) return std::nullopt;
+  if (std::abs(wheel) < min_distance_) return std::nullopt;
   return 1.0 - vo / wheel;
 }
 

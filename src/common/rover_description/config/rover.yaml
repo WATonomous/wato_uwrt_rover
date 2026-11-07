@@ -8,6 +8,8 @@ wheel:
   width: 0.12
   mass: 2.0
   friction: 1.0
+  # No motor torque limit in sim: Gazebo's diff drive commands wheel velocities, and a limit
+  # lets a saturated wheel's drive reaction wind the bogie onto its stop while skid-turning.
 
 track_width: 0.90  # distance between left and right wheel centers
 
