@@ -51,7 +51,7 @@ navcam:
   near: 0.3
   far: 10.0
 
-joint_state_rate: 50.0  # Hz, wheel encoders and suspension angles
+joint_state_rate: 25.0  # Hz, wheel encoders and suspension angles
 
 imu:
   rate: 50.0
@@ -64,8 +64,8 @@ sun_sensor:
   noise: 0.005  # rad, angular noise of the measured sun direction
 
 drive:
-  speed: 0.4  # m/s nominal forward speed
-  turn_rate: 0.5  # rad/s for turn-in-place
+  speed: 0.4  # m/s nominal forward speed (0.5 bounces the bogies onto their stops over rocks)
+  turn_rate: 0.6  # rad/s for turn-in-place
   max_accel: 0.5  # m/s^2
 
 # Limits the planner (ACE) must respect. Stricter than the fault limits below so a
@@ -73,7 +73,7 @@ drive:
 ace_limits:
   tilt: 0.35  # rad (20 deg) roll or pitch
   rocker: 0.35  # rad, rocker angle relative to body
-  bogie: 0.50  # rad, bogie angle relative to rocker
+  bogie: 0.42  # rad, bogie angle relative to rocker: margin below the 0.57 fault for bumps at speed
   belly_clearance: 0.08  # m, minimum belly clearance
   wheel_margin: 0.03  # m, position uncertainty added around each wheel patch
 

@@ -8,9 +8,14 @@ size: 60.0  # m, square world
 resolution: 0.15  # m, terrain mesh vertex spacing
 gravity: 3.721
 
+clock_rate: 100.0  # Hz, sim time published to ROS (physics runs at 250 Hz)
+
 sun:
   azimuth_deg: 135.0  # counter-clockwise from +x (east)
   elevation_deg: 40.0
+  # Shadows double Gazebo's rendering cost in software rendering (Docker on a Mac): ~300% vs
+  # ~150% CPU. Visual odometry works on the ground texture without them.
+  shadows: false
 
 terrain:
   rms_height: 0.4  # m, rolling base terrain

@@ -34,7 +34,13 @@ target_link_libraries(JointStates
   ignition-plugin1::register
 )
 
-install(TARGETS RockerDifferential JointStates LIBRARY DESTINATION lib)
+add_library(SimClock SHARED src/sim_clock.cpp)
+target_link_libraries(SimClock
+  ignition-gazebo6::ignition-gazebo6
+  ignition-plugin1::register
+)
+
+install(TARGETS RockerDifferential JointStates SimClock LIBRARY DESTINATION lib)
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_package()

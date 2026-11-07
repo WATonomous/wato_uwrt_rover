@@ -28,6 +28,7 @@ namespace
 {
 
 constexpr double kLethalCheckStart = 0.5;  // m along a path before lethal route cells reject it
+constexpr double kAceMargin = 0.5;  // m beyond the rover footprint for ACE's filter windows
 
 PathPose arcPose(const PathPose & start, double k, double ds)
 {
@@ -295,7 +296,14 @@ PlanResult plan(
   });
   result.candidates = static_cast<int>(result.ranked.size());
 
-  const AceMaps maps = buildAceMaps(p, *in.elevation);
+  // ACE only ever looks within reach of the path tree, so filter just that part of the map
+  // (a ~4 m square instead of the whole window: several times less work per cycle).
+  double reach = 0.0;
+  for (const auto & path : tree) {
+    for (const auto & pose : path.poses) reach = std::max(reach, std::hypot(pose.x, pose.y));
+  }
+  reach += std::hypot(p.body_length / 2.0 + p.wheel_radius, p.track_width / 2.0 + p.wheel_width) + kAceMargin;
+  const AceMaps maps = buildAceMaps(p, crop(*in.elevation, in.rover.x, in.rover.y, reach, kUnknown));
   for (const RankedPath & ranked : result.ranked) {
     if (result.ace_evaluations >= max_ace_paths) break;
     ++result.ace_evaluations;

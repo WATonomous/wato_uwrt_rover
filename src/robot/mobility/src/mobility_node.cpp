@@ -68,6 +68,15 @@ constexpr size_t kTrailLength = 200;  // points kept (10 m)
 constexpr double kMinBackout = 0.2;  // m of trail needed to back out at all
 constexpr double kBackoutDone = 0.1;  // m from the end of the retraced trail
 constexpr size_t kBackoutLookahead = 8;  // trail points (0.4 m) ahead of the closest one
+constexpr double kBackoutProgress = 0.05;  // m closer to the end that counts as progress
+constexpr double kBackoutNoProgress = 10.0;  // s without progress before giving up
+
+enum class Backout
+{
+  kGoing,
+  kDone,
+  kStuck,
+};
 
 const std::array<std::string, 4> kSuspensionJoints = {
   "rocker_left_joint", "rocker_right_joint", "bogie_left_joint", "bogie_right_joint"};
@@ -219,13 +228,27 @@ private:
           // blind turns. Without a usable trail it waits for the ground instead.
           if (startBackout()) {
             ++recoveries_;
+            fault_before_recovery_ = fault_;
             if (fault_ != Fault::kNoSafePath) reportHazard();
             setMode(Mode::kRecovering, Fault::kNone, "auto-recovery: backing out along the trail");
           }
         }
         break;
       case Mode::kRecovering:
-        if (backOut(pose, v, w)) setMode(Mode::kIdle, Fault::kNone, "backed out");
+        switch (backOut(pose, v, w)) {
+          case Backout::kGoing:
+            break;
+          case Backout::kDone:
+            setMode(Mode::kIdle, Fault::kNone, "backed out");
+            break;
+          case Backout::kStuck:
+            // Do not keep thrashing: stop and wait for the ground.
+            v = 0.0;
+            w = 0.0;
+            recoveries_ = max_recoveries_;
+            enterFault(fault_before_recovery_, "auto-recovery could not back out", pose);
+            break;
+        }
         break;
     }
     if (mode_ == Mode::kDriving) recordTrail(pose);
@@ -249,6 +272,9 @@ private:
   bool startBackout()
   {
     backout_path_.clear();
+    backout_start_ = now();
+    backout_progress_time_ = now();
+    backout_best_ = std::numeric_limits<double>::max();
     double length = 0.0;
     for (auto it = trail_.rbegin(); it != trail_.rend() && length < backout_distance_; ++it) {
       if (!backout_path_.empty()) {
@@ -257,16 +283,30 @@ private:
       backout_path_.push_back(*it);
     }
     if (length < kMinBackout) return false;
+    backout_length_ = length;
     // The retraced part is behind the rover afterwards; drop it so the next backout goes further back.
     trail_.resize(trail_.size() - backout_path_.size() + 1);
     return true;
   }
 
-  // Reverse pure pursuit along backout_path_. Returns true once at its end.
-  bool backOut(const Pose & pose, double & v, double & w)
+  // Reverse pure pursuit along backout_path_.
+  Backout backOut(const Pose & pose, double & v, double & w)
   {
     const auto & end = backout_path_.back();
-    if (std::hypot(end[0] - pose.x, end[1] - pose.y) < kBackoutDone) return true;
+    const double remaining = std::hypot(end[0] - pose.x, end[1] - pose.y);
+    if (remaining < kBackoutDone) return Backout::kDone;
+    // Stuck: no progress towards the end for a while, or far longer than the drive should take.
+    if (remaining < backout_best_ - kBackoutProgress) {
+      backout_best_ = remaining;
+      backout_progress_time_ = now();
+    }
+    const double expected = backout_length_ / backout_speed_;
+    if (
+      now() - backout_progress_time_ > rclcpp::Duration::from_seconds(kBackoutNoProgress) ||
+      now() - backout_start_ > rclcpp::Duration::from_seconds(3.0 * expected + kBackoutNoProgress))
+    {
+      return Backout::kStuck;
+    }
     size_t closest = 0;
     for (size_t k = 0; k < backout_path_.size(); ++k) {
       if (
@@ -276,6 +316,7 @@ private:
         closest = k;
       }
     }
+    if (closest + 1 == backout_path_.size()) return Backout::kDone;
     const size_t target = std::min(backout_path_.size() - 1, closest + kBackoutLookahead);
     const double dx = backout_path_[target][0] - pose.x;
     const double dy = backout_path_[target][1] - pose.y;
@@ -284,7 +325,7 @@ private:
     // Arc through the rover tangent to its heading and through the target, driven backwards.
     v = -backout_speed_;
     w = std::clamp(v * 2.0 * ty / std::max(tx * tx + ty * ty, 0.04), -rover_.drive.turn_rate, rover_.drive.turn_rate);
-    return false;
+    return Backout::kGoing;
   }
 
   bool freshPlan() const
@@ -440,6 +481,11 @@ private:
   std::array<double, 3> fault_pose_{};
   std::deque<std::array<double, 2>> trail_;
   std::vector<std::array<double, 2>> backout_path_;
+  double backout_length_{0.0};
+  double backout_best_{0.0};
+  rclcpp::Time backout_start_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time backout_progress_time_{0, 0, RCL_ROS_TIME};
+  Fault fault_before_recovery_{Fault::kNone};
   int recoveries_{0};
   int no_path_count_{0};
   bool turning_{false};

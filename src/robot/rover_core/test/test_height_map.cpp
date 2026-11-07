@@ -36,6 +36,20 @@ TEST(HeightMap, LatestObservationWins)
   EXPECT_TRUE(std::isnan(map.elevation().valueAt(1.05, 0.05, 0.0f)));
 }
 
+TEST(HeightMap, CropKeepsWorldCoordinates)
+{
+  Grid<float> g(0.1, -5.0, -5.0, 100, 100, 0.0f);
+  g.at(60, 55) = 1.0f;  // cell centre (1.05, 0.55)
+  const Grid<float> c = crop(g, 1.0, 0.5, 0.5, kUnknown);
+  EXPECT_EQ(c.width, 11);
+  EXPECT_FLOAT_EQ(c.valueAt(1.05, 0.55, kUnknown), 1.0f);
+  EXPECT_FLOAT_EQ(c.valueAt(0.75, 0.25, kUnknown), 0.0f);
+  EXPECT_FLOAT_EQ(c.valueAt(2.0, 0.5, -1.0f), -1.0f);  // outside the crop
+  const Grid<float> edge = crop(g, 4.95, 4.95, 0.5, kUnknown);  // runs off the source grid
+  EXPECT_TRUE(std::isnan(edge.valueAt(5.2, 5.2, 0.0f)));
+  EXPECT_FLOAT_EQ(edge.valueAt(4.85, 4.85, kUnknown), 0.0f);
+}
+
 TEST(HeightMap, RecenterKeepsWorldCoordinates)
 {
   HeightMap map(0.1, 100);

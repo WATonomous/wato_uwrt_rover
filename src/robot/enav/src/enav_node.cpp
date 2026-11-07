@@ -57,6 +57,9 @@ using rover_core::Pose2;
 namespace
 {
 
+constexpr int kMapPublishCycles = 4;  // height map + cloud every 4 planning cycles (0.5 Hz)
+constexpr int kCloudStride = 3;  // height-map cells between Foxglove cloud points
+
 Pose2 toPose2(const geometry_msgs::msg::TransformStamped & tf)
 {
   const auto & q = tf.transform.rotation;
@@ -103,7 +106,7 @@ public:
   : Node("enav")
   , rover_(rover_core::loadRoverParams(rover_core::roverConfigPath()))
   , base_from_optical_(rover_.navcamOptical())
-  , height_map_(declare_parameter("map_resolution", 0.05), declare_parameter("map_cells", 320))
+  , height_map_(declare_parameter("map_resolution", 0.05), declare_parameter("map_cells", 240))
   , tf_buffer_(get_clock())
   , tf_listener_(tf_buffer_)
   {
@@ -259,7 +262,7 @@ private:
       footprint_stamped_ = true;
     }
     rover_core::stampObservedCost(observed_cost_, height_map_.elevation(), *map_from_odom_, cost_);
-    if (cycles_ % 2 == 0) publishMaps();
+    if (cycles_ % kMapPublishCycles == 0) publishMaps();
 
     rover_msgs::msg::EnavPlan msg;
     msg.header.stamp = odom_tf.header.stamp;
@@ -358,21 +361,22 @@ private:
     hm.elevation = e.data;
     height_pub_->publish(hm);
 
-    // Every other cell as a point cloud for Foxglove.
+    // Every kCloudStride-th cell (15 cm) as a point cloud for Foxglove: plenty to see the
+    // terrain, ~5x less to send and draw than every cell.
     sensor_msgs::msg::PointCloud2 cloud;
     cloud.header = hm.header;
     sensor_msgs::PointCloud2Modifier mod(cloud);
     mod.setPointCloud2FieldsByString(1, "xyz");
     size_t n = 0;
-    for (int j = 0; j < e.height; j += 2) {
-      for (int i = 0; i < e.width; i += 2) n += std::isnan(e.at(i, j)) ? 0 : 1;
+    for (int j = 0; j < e.height; j += kCloudStride) {
+      for (int i = 0; i < e.width; i += kCloudStride) n += std::isnan(e.at(i, j)) ? 0 : 1;
     }
     mod.resize(n);
     sensor_msgs::PointCloud2Iterator<float> x(cloud, "x");
     sensor_msgs::PointCloud2Iterator<float> y(cloud, "y");
     sensor_msgs::PointCloud2Iterator<float> z(cloud, "z");
-    for (int j = 0; j < e.height; j += 2) {
-      for (int i = 0; i < e.width; i += 2) {
+    for (int j = 0; j < e.height; j += kCloudStride) {
+      for (int i = 0; i < e.width; i += kCloudStride) {
         if (std::isnan(e.at(i, j))) continue;
         *x = static_cast<float>(e.cellX(i));
         *y = static_cast<float>(e.cellY(j));

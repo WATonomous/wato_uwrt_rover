@@ -31,7 +31,7 @@ sun_sensor:
 enav:
   ros__parameters:
     map_resolution: 0.05
-    map_cells: 320  # 16 m rover-centric height map
+    map_cells: 240  # 12 m rolling window: camera range (~7 m) plus margin; older ground is dropped
     recenter_margin: 3.0
     depth_stride: 1
     max_range: 7.0

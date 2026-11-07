@@ -135,9 +135,9 @@
       }
     },
     "Image!navcam": {
-      "cameraTopic": "/navcam/image",
+      "cameraTopic": "/navcam/image_viz/compressed",
       "imageMode": {
-        "imageTopic": "/navcam/image"
+        "imageTopic": "/navcam/image_viz/compressed"
       }
     },
     "Plot!localization": {

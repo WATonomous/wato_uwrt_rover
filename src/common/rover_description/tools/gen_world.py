@@ -776,6 +776,7 @@ def world_sdf(cfg, spawn_z):
             ("imu", "Imu", ""),
         )
     )
+    shadows = "true" if sun["shadows"] else "false"
     return f"""<?xml version='1.0'?>
 <sdf version='1.8'>
   <world name='mars'>
@@ -784,13 +785,17 @@ def world_sdf(cfg, spawn_z):
       <real_time_factor>1.0</real_time_factor>
     </physics>
     <gravity>0 0 {-cfg["gravity"]}</gravity>{plugins}
+    <plugin filename='SimClock' name='rover_sim::SimClock'>
+      <rate>{cfg["clock_rate"]}</rate>
+      <topic>/sim_clock</topic>
+    </plugin>
     <scene>
       <ambient>0.45 0.38 0.33 1</ambient>
       <background>0.78 0.6 0.45 1</background>
-      <shadows>true</shadows>
+      <shadows>{shadows}</shadows>
     </scene>
     <light type='directional' name='sun'>
-      <cast_shadows>true</cast_shadows>
+      <cast_shadows>{shadows}</cast_shadows>
       <pose>0 0 30 0 0 0</pose>
       <diffuse>1.0 0.95 0.88 1</diffuse>
       <specular>0.1 0.1 0.1 1</specular>

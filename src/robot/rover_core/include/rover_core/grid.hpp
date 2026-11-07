@@ -126,6 +126,29 @@ struct Grid
   }
 };
 
+// The square of cells within `half` metres of (x, y), at the same world coordinates; cells that
+// fall off `g` are `fill`.
+template <typename T>
+Grid<T> crop(const Grid<T> & g, double x, double y, double half, T fill)
+{
+  const int r = static_cast<int>(std::ceil(half / g.resolution));
+  const int ci = static_cast<int>(std::floor((x - g.origin_x) / g.resolution));
+  const int cj = static_cast<int>(std::floor((y - g.origin_y) / g.resolution));
+  Grid<T> out(
+    g.resolution,
+    g.origin_x + (ci - r) * g.resolution,
+    g.origin_y + (cj - r) * g.resolution,
+    2 * r + 1,
+    2 * r + 1,
+    fill);
+  for (int j = 0; j < out.height; ++j) {
+    for (int i = 0; i < out.width; ++i) {
+      if (g.contains(ci - r + i, cj - r + j)) out.at(i, j) = g.at(ci - r + i, cj - r + j);
+    }
+  }
+  return out;
+}
+
 // Bilinear interpolation between cell centers. Returns NaN off-grid or next to unknown cells.
 inline float bilinear(const Grid<float> & g, double x, double y)
 {

@@ -57,6 +57,21 @@ def nodes(context):
         )
         for pkg, exe, name in SIM_NODES
     ]
+    # JPEG copy of the navcam for Foxglove: ~15x less data over the websocket than raw images.
+    out.append(
+        Node(
+            package="image_transport",
+            executable="republish",
+            arguments=["raw", "compressed"],
+            remappings=[
+                ("in", "/navcam/image"),
+                ("out", "/navcam/image_viz"),
+                ("out/compressed", "/navcam/image_viz/compressed"),
+            ],
+            parameters=[{"use_sim_time": True}],
+            output="screen",
+        )
+    )
     # The rover model for visualization: URDF on /robot_description, TF for every link from
     # /joint_states (wheels spin, rockers and bogies articulate).
     urdf = os.path.join(

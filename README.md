@@ -117,6 +117,9 @@ flowchart LR
 Each cycle (2 Hz), while the rover is still driving the previous arc:
 
 1. **Height map**: navcam depth goes into a rover-centric 5 cm height map. Each cell keeps the most recent observation.
+   - It is a rolling 12 m window (the camera sees ~7 m). Ground that falls out of the window as the rover moves is dropped, not stored.
+   - What the rover needs to remember about the whole world is kept coarsely, in the 25 cm map-frame route cost below: rocks and steps it has seen, and keep-out zones. That's ~230 KB for the 60 m world.
+   - ACE filters only the part of the window paths can reach (~4 m around the rover).
 2. **Route cost** (map frame), combining:
    - slope cost from the orbital DEM;
    - step-height cost from what the rover has seen;
@@ -149,7 +152,7 @@ Simulation runs on an Apple M1 (Docker Desktop, software rendering). Errors are 
 
 | Scenario | Outcome |
 | --- | --- |
-| `traverse` | **All 6 waypoints reached**, 162.7 m in ~14 min of sim time. **One slip fault** (61 %): stopped, backed out, routed around. Final estimate error 0.20 m (0.02–0.9 m along the way). Odometry alone drifted 1.07 m (0.7 % of distance). Planning ~16 ms per cycle. |
+| `traverse` | **All 6 waypoints reached** in ~6 min of sim time (133 m, moving 96 % of the driving time at ~0.39 m/s), no faults, at 0.99× real time with Foxglove attached. An earlier, slower run (14 min) had **one real slip fault** (61 %): it stopped, backed out and routed around. Final estimate error 0.20 m; odometry alone drifted 0.7 % of distance. Planning ~16 ms per cycle. |
 | `rock_field` | Goal reached through the dense rock field, 32.4 m, no faults. Final estimate error 0.12 m, odometry alone 0.45 m (1.4 %). Run with `./watod up`. |
 | `sand_trap` | Both waypoints reached with no faults: the sand did not cost traction in Gazebo (see *Simulation notes*). |
 
@@ -182,11 +185,20 @@ Unit tests cover ACE (including a check that the bounds contain every exact conf
 
 ## Simulation notes
 
-- Gazebo renders the camera in software inside Docker on a Mac, so the navcam is 320×240 at 5 Hz.
-  - Physics steps at 4 ms, and joint states are published at 50 Hz by a small plugin (`rover_sim/JointStates`). Fortress's own publisher sends them every physics step.
-  - With these, the whole stack runs at real time on an M1 using about 1.5 CPU cores.
-  - Everything uses sim time, so a slower machine only slows the run down.
-- The rover drives at 0.4 m/s and turns in place at 0.5 rad/s, much faster than Perseverance (about 0.04 m/s), to keep demos short (`drive` in `rover.yaml`).
+- Performance on an M1 with Foxglove attached: the whole stack uses about 1.2 CPU cores (Gazebo ~100 %, robot nodes ~17 %, Foxglove bridge ~5 %) and runs at real time. What it took, biggest win first:
+
+  | Change | Why |
+  | --- | --- |
+  | Shadows off (`sun.shadows` in `world.yaml`) | Gazebo renders in software inside Docker on a Mac; shadow passes doubled its CPU (~300 % → ~150 %). VO tracks the ground texture without them. |
+  | `/clock` at 100 Hz (`rover_sim/SimClock`) | Gazebo's own `/clock` is sent every physics step (250 Hz) to every node running on sim time. |
+  | Joint states at 25 Hz (`rover_sim/JointStates`) | Fortress's publisher sends them every physics step; this also halves `robot_state_publisher`'s TF traffic. |
+  | JPEG navcam for Foxglove (`/navcam/image_viz/compressed`) | ~75 KB/s instead of ~1.2 MB/s of raw images over the websocket. |
+  | Height cloud at 15 cm, every 2 s | ~40 KB/s instead of ~375 KB/s, and far fewer points for Foxglove to draw. |
+  | 12 m height-map window; ACE crops to ~4 m | Less per-cycle work on map cells nothing reads. |
+  | Navcam 320×240 at 5 Hz, physics at 4 ms | Keeps software rendering and physics cheap. |
+
+  Everything uses sim time, so a slower machine only slows the run down.
+- The rover drives at 0.4 m/s and turns in place at 0.6 rad/s, much faster than Perseverance (about 0.04 m/s), to keep demos short (`drive` in `rover.yaml`). At 0.5 m/s, bumps off rocks swing the bogies onto their stops.
 - Depth comes straight from Gazebo's RGB-D camera instead of stereo matching.
 - The sun sensor and the `eval` node read Gazebo ground truth (`/sim/*`). Nothing else does.
 - Gazebo's diff drive commands wheel velocities with no torque limit, so wheels never stall in sim; stall detection matters on hardware.

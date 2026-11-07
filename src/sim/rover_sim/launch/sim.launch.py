@@ -21,7 +21,8 @@ from launch_ros.actions import Node
 # Gazebo -> ROS topics the rover sees. Ground truth goes to /sim/* and is only used by
 # simulated sensors and the eval node, never by the autonomy stack directly.
 BRIDGED_TOPICS = [
-    "/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock",
+    # rover_sim/SimClock at 100 Hz, remapped to /clock (Gazebo's own /clock is per physics step)
+    "/sim_clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock",
     "/cmd_vel@geometry_msgs/msg/Twist]ignition.msgs.Twist",
     "/imu@sensor_msgs/msg/Imu[ignition.msgs.IMU",
     "/world/mars/model/rover/joint_state@sensor_msgs/msg/JointState[ignition.msgs.Model",
@@ -57,7 +58,10 @@ def generate_launch_description():
                 package="ros_gz_bridge",
                 executable="parameter_bridge",
                 arguments=BRIDGED_TOPICS,
-                remappings=[("/world/mars/model/rover/joint_state", "/joint_states")],
+                remappings=[
+                    ("/world/mars/model/rover/joint_state", "/joint_states"),
+                    ("/sim_clock", "/clock"),
+                ],
                 output="screen",
             ),
         ]
