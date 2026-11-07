@@ -518,12 +518,12 @@ def rover_sdf(rover):
     <joint name='rocker_{side}_joint' type='revolute'>
       <parent>base_link</parent><child>rocker_{side}</child>
       <axis><xyz>0 1 0</xyz><limit><lower>{-rocker["joint_limit"]}</lower><upper>{rocker["joint_limit"]}</upper></limit>
-        <dynamics><damping>2.0</damping></dynamics></axis>
+        <dynamics><damping>{rocker["damping"]}</damping></dynamics></axis>
     </joint>
     <joint name='bogie_{side}_joint' type='revolute'>
       <parent>rocker_{side}</parent><child>bogie_{side}</child>
       <axis><xyz>0 1 0</xyz><limit><lower>{-bogie["joint_limit"]}</lower><upper>{bogie["joint_limit"]}</upper></limit>
-        <dynamics><damping>1.0</damping></dynamics></axis>
+        <dynamics><damping>{bogie["damping"]}</damping></dynamics></axis>
     </joint>"""
         )
         for position, (wx, parent) in wheels.items():
@@ -592,6 +592,146 @@ def rover_sdf(rover):
         + "".join(joints)
         + plugins
         + "\n  </model>\n</sdf>\n"
+    )
+
+
+def rover_urdf(rover):
+    """The same rover as a URDF, for robot_state_publisher and Foxglove (visuals only)."""
+    wheel, rocker, bogie, body, cam = (
+        rover["wheel"],
+        rover["rocker"],
+        rover["bogie"],
+        rover["body"],
+        rover["navcam"],
+    )
+    radius, width = wheel["radius"], wheel["width"]
+    half_track = rover["track_width"] / 2.0
+    beam_y = half_track - width / 2.0 - 0.04
+    pivot_x = rocker["pivot_x"]
+    bogie_x = pivot_x + rocker["bogie_pivot"][0]
+    bogie_z = rocker["bogie_pivot"][1]
+    wheel_z = bogie_z - bogie["drop"]
+    head_x = cam["x"] - 0.07 * math.cos(cam["pitch"])
+    head_z = cam["z"] + 0.07 * math.sin(cam["pitch"])
+
+    def visual(xyz, rpy, geometry, material):
+        return (
+            f'<visual><origin xyz="{xyz[0]:.4f} {xyz[1]:.4f} {xyz[2]:.4f}" rpy="{rpy[0]:.4f} {rpy[1]:.4f} {rpy[2]:.4f}"/>'
+            f'<geometry>{geometry}</geometry><material name="{material}"/></visual>'
+        )
+
+    def beam(p0, p1):
+        dx, dz = p1[0] - p0[0], p1[1] - p0[1]
+        return visual(
+            ((p0[0] + p1[0]) / 2.0, 0.0, (p0[1] + p1[1]) / 2.0),
+            (0.0, math.atan2(-dz, dx), 0.0),
+            f'<box size="{math.hypot(dx, dz):.4f} 0.04 0.05"/>',
+            "frame",
+        )
+
+    def joint(name, kind, parent, child, xyz, limit):
+        limits = (
+            f'<limit lower="{-limit}" upper="{limit}" effort="100" velocity="10"/>'
+            if limit
+            else ""
+        )
+        return (
+            f'<joint name="{name}" type="{kind}"><parent link="{parent}"/><child link="{child}"/>'
+            f'<origin xyz="{xyz[0]:.4f} {xyz[1]:.4f} {xyz[2]:.4f}"/><axis xyz="0 1 0"/>{limits}</joint>'
+        )
+
+    parts = [
+        '<material name="body"><color rgba="0.85 0.85 0.82 1"/></material>',
+        '<material name="frame"><color rgba="0.7 0.7 0.7 1"/></material>',
+        '<material name="tire"><color rgba="0.15 0.15 0.15 1"/></material>',
+        '<link name="base_link">'
+        + visual(
+            (0, 0, body["center_z"]),
+            (0, 0, 0),
+            f'<box size="{body["length"]} {body["width"]} {body["height"]}"/>',
+            "body",
+        )
+        + visual(
+            (cam["x"], 0, cam["z"] / 2.0),
+            (0, 0, 0),
+            f'<cylinder radius="0.025" length="{cam["z"]}"/>',
+            "frame",
+        )
+        + visual(
+            (head_x, 0, head_z),
+            (0, cam["pitch"], 0),
+            '<box size="0.08 0.24 0.07"/>',
+            "tire",
+        )
+        + "</link>",
+    ]
+    for side, sign in (("left", 1.0), ("right", -1.0)):
+        y = sign * beam_y
+        parts.append(
+            f'<link name="rocker_{side}">{beam((0, 0), rocker["front_wheel"])}{beam((0, 0), rocker["bogie_pivot"])}</link>'
+        )
+        parts.append(
+            f'<link name="bogie_{side}">'
+            f"{beam((0, 0), (bogie['half_length'], -bogie['drop']))}"
+            f"{beam((0, 0), (-bogie['half_length'], -bogie['drop']))}</link>"
+        )
+        parts.append(
+            joint(
+                f"rocker_{side}_joint",
+                "revolute",
+                "base_link",
+                f"rocker_{side}",
+                (pivot_x, y, 0),
+                rocker["joint_limit"],
+            )
+        )
+        parts.append(
+            joint(
+                f"bogie_{side}_joint",
+                "revolute",
+                f"rocker_{side}",
+                f"bogie_{side}",
+                (bogie_x - pivot_x, 0, bogie_z),
+                bogie["joint_limit"],
+            )
+        )
+        wheel_y = sign * (half_track - beam_y)
+        for position, parent_x, parent_z, parent in (
+            ("front", rocker["front_wheel"][0], wheel_z, "rocker"),
+            ("middle", bogie["half_length"], wheel_z - bogie_z, "bogie"),
+            ("rear", -bogie["half_length"], wheel_z - bogie_z, "bogie"),
+        ):
+            name = f"wheel_{position}_{side}"
+            parts.append(
+                f'<link name="{name}">'
+                + visual(
+                    (0, 0, 0),
+                    (1.5708, 0, 0),
+                    f'<cylinder radius="{radius}" length="{width}"/>',
+                    "tire",
+                )
+                + visual(
+                    (0, sign * (width / 2.0 + 0.002), 0),
+                    (1.5708, 0, 0),
+                    f'<cylinder radius="{radius * 0.5}" length="0.004"/>',
+                    "frame",
+                )
+                + "</link>"
+            )
+            parts.append(
+                joint(
+                    f"{name}_joint",
+                    "continuous",
+                    f"{parent}_{side}",
+                    name,
+                    (parent_x, wheel_y, parent_z),
+                    None,
+                )
+            )
+    return (
+        '<?xml version="1.0"?>\n<robot name="rover">\n  '
+        + "\n  ".join(parts)
+        + "\n</robot>\n"
     )
 
 
@@ -803,6 +943,8 @@ def main():
     with open(os.path.join(rover_dir, "model.sdf"), "w") as f:
         f.write(rover_sdf(rover))
     write_model_config(rover_dir, "rover")
+    with open(os.path.join(rover_dir, "rover.urdf"), "w") as f:
+        f.write(rover_urdf(rover))
 
     pivot_height = rover["wheel"]["radius"] - rover["rocker"]["front_wheel"][1]
     os.makedirs(os.path.join(args.out, "worlds"), exist_ok=True)

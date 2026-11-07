@@ -125,7 +125,7 @@ public:
       declare_parameter("step_lethal", 0.50),
       declare_parameter("cost_weight", 4.0)};
     weights_ = {
-      declare_parameter("turn_weight", 0.3),
+      declare_parameter("turn_weight", 0.8),
       declare_parameter("unknown_weight", 0.2),
       declare_parameter("heading_change_weight", 0.3)};
     const rover_core::PathTreeConfig tree{
@@ -432,7 +432,7 @@ private:
   }
 
   // Where the rover is going: waypoint pillars (done grey, current magenta, upcoming orange),
-  // the global route down the cost-to-go grid, and the rover body with a status label.
+  // the global route down the cost-to-go grid, and a status label above the rover.
   void publishMission(const Pose2 & rover_map, const std::vector<Pose2> & route)
   {
     visualization_msgs::msg::MarkerArray markers;
@@ -501,14 +501,7 @@ private:
       markers.markers.push_back(line);
     }
 
-    auto body = marker(base_frame_, visualization_msgs::msg::Marker::CUBE, 0.85f, 0.85f, 0.85f, 0.9f);
-    body.frame_locked = true;
-    body.pose.position.z = rover_.body_center_z;
-    body.scale.x = rover_.body_length;
-    body.scale.y = rover_.body_width;
-    body.scale.z = rover_.body_height;
-    markers.markers.push_back(body);
-
+    // The rover itself is drawn from its URDF (robot_state_publisher); this is its status label.
     auto status = marker(base_frame_, visualization_msgs::msg::Marker::TEXT_VIEW_FACING, 1.0f, 1.0f, 1.0f, 1.0f);
     status.frame_locked = true;
     status.pose.position.z = 1.4;

@@ -13,17 +13,20 @@
 // limitations under the License.
 
 // Mobility: executes ENav's committed arc and owns fault protection.
-//   PANORAMA   rotate once in place at startup so ENav has terrain all around
+//   PANORAMA   rotate once in place at startup (on the flat landing pad) so ENav has terrain
+//              all around; never used for recovery, since the turn is not checked by ACE
 //   IDLE       wait for a plan
 //   DRIVING    turn in place to the path heading, then pure-pursuit along the committed arc
 //   FAULT      stopped; tilt / suspension / slip / stall / no safe path. Cleared by
 //              /mobility/clear_fault (the "ground in the loop"), or by auto-recovery
-//   RECOVERING back out of the hazard, report it to ENav as a keep-out zone
+//   RECOVERING retrace its own trail backwards (ground it just drove over), and report the
+//              hazard to ENav as a keep-out zone
 
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -60,6 +63,11 @@ const std::array<std::string, 6> kWheelJoints = {
   "wheel_middle_right_joint",
   "wheel_rear_right_joint"};
 constexpr double kRecoveryReset = 30.0;  // s of fault-free driving that restores the recovery budget
+constexpr double kTrailSpacing = 0.05;  // m between recorded trail points
+constexpr size_t kTrailLength = 200;  // points kept (10 m)
+constexpr double kMinBackout = 0.2;  // m of trail needed to back out at all
+constexpr double kBackoutDone = 0.1;  // m from the end of the retraced trail
+constexpr size_t kBackoutLookahead = 8;  // trail points (0.4 m) ahead of the closest one
 
 const std::array<std::string, 4> kSuspensionJoints = {
   "rocker_left_joint", "rocker_right_joint", "bogie_left_joint", "bogie_right_joint"};
@@ -108,7 +116,7 @@ public:
   , rover_(rover_core::loadRoverParams(rover_core::roverConfigPath()))
   , monitor_(rover_.faults)
   , lookahead_(declare_parameter("lookahead", 0.6))
-  , turn_start_(declare_parameter("turn_start", 0.25))
+  , turn_start_(declare_parameter("turn_start", 0.6))
   , turn_done_(declare_parameter("turn_done", 0.05))
   , plan_timeout_(declare_parameter("plan_timeout", 2.0))
   , no_path_limit_(declare_parameter("no_safe_path_cycles", 10))
@@ -207,30 +215,76 @@ private:
       case Mode::kFault:
         if (auto_recover_ && recoveries_ < max_recoveries_ && now() - fault_time_ > rclcpp::Duration::from_seconds(1.0))
         {
-          ++recoveries_;
-          if (fault_ == Fault::kNoSafePath) {
-            setMode(Mode::kPanorama, Fault::kNone, "auto-recovery: look around for a new path");
-          } else {
-            reportHazard();
-            backout_start_ = {pose.x, pose.y};
-            setMode(Mode::kRecovering, Fault::kNone, "auto-recovery: backing out");
+          // Back out along the rover's own tracks: ground it has just driven over, so no
+          // blind turns. Without a usable trail it waits for the ground instead.
+          if (startBackout()) {
+            ++recoveries_;
+            if (fault_ != Fault::kNoSafePath) reportHazard();
+            setMode(Mode::kRecovering, Fault::kNone, "auto-recovery: backing out along the trail");
           }
         }
         break;
       case Mode::kRecovering:
-        v = -backout_speed_;
-        if (std::hypot(pose.x - backout_start_[0], pose.y - backout_start_[1]) >= backout_distance_) {
-          v = 0.0;
-          setMode(Mode::kIdle, Fault::kNone, "backed out");
-        }
+        if (backOut(pose, v, w)) setMode(Mode::kIdle, Fault::kNone, "backed out");
         break;
     }
+    if (mode_ == Mode::kDriving) recordTrail(pose);
     if (mode_ == Mode::kFault) {
       v = 0.0;
       w = 0.0;
     }
     command(v, w);
     publishStatus();
+  }
+
+  // Positions driven forward, newest last, spaced kTrailSpacing apart.
+  void recordTrail(const Pose & pose)
+  {
+    if (!trail_.empty() && std::hypot(pose.x - trail_.back()[0], pose.y - trail_.back()[1]) < kTrailSpacing) return;
+    trail_.push_back({pose.x, pose.y});
+    if (trail_.size() > kTrailLength) trail_.pop_front();
+  }
+
+  // The stretch of trail to retrace (newest first), up to backout_distance long.
+  bool startBackout()
+  {
+    backout_path_.clear();
+    double length = 0.0;
+    for (auto it = trail_.rbegin(); it != trail_.rend() && length < backout_distance_; ++it) {
+      if (!backout_path_.empty()) {
+        length += std::hypot((*it)[0] - backout_path_.back()[0], (*it)[1] - backout_path_.back()[1]);
+      }
+      backout_path_.push_back(*it);
+    }
+    if (length < kMinBackout) return false;
+    // The retraced part is behind the rover afterwards; drop it so the next backout goes further back.
+    trail_.resize(trail_.size() - backout_path_.size() + 1);
+    return true;
+  }
+
+  // Reverse pure pursuit along backout_path_. Returns true once at its end.
+  bool backOut(const Pose & pose, double & v, double & w)
+  {
+    const auto & end = backout_path_.back();
+    if (std::hypot(end[0] - pose.x, end[1] - pose.y) < kBackoutDone) return true;
+    size_t closest = 0;
+    for (size_t k = 0; k < backout_path_.size(); ++k) {
+      if (
+        std::hypot(backout_path_[k][0] - pose.x, backout_path_[k][1] - pose.y) <
+        std::hypot(backout_path_[closest][0] - pose.x, backout_path_[closest][1] - pose.y))
+      {
+        closest = k;
+      }
+    }
+    const size_t target = std::min(backout_path_.size() - 1, closest + kBackoutLookahead);
+    const double dx = backout_path_[target][0] - pose.x;
+    const double dy = backout_path_[target][1] - pose.y;
+    const double tx = std::cos(pose.yaw) * dx + std::sin(pose.yaw) * dy;
+    const double ty = -std::sin(pose.yaw) * dx + std::cos(pose.yaw) * dy;
+    // Arc through the rover tangent to its heading and through the target, driven backwards.
+    v = -backout_speed_;
+    w = std::clamp(v * 2.0 * ty / std::max(tx * tx + ty * ty, 0.04), -rover_.drive.turn_rate, rover_.drive.turn_rate);
+    return false;
   }
 
   bool freshPlan() const
@@ -384,7 +438,8 @@ private:
   std::string detail_;
   rclcpp::Time fault_time_{0, 0, RCL_ROS_TIME};
   std::array<double, 3> fault_pose_{};
-  std::array<double, 2> backout_start_{};
+  std::deque<std::array<double, 2>> trail_;
+  std::vector<std::array<double, 2>> backout_path_;
   int recoveries_{0};
   int no_path_count_{0};
   bool turning_{false};

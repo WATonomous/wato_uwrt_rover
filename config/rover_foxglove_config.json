@@ -42,6 +42,36 @@
         },
         "frame:base_link": {
           "visible": true
+        },
+        "frame:rocker_left": {
+          "visible": false
+        },
+        "frame:rocker_right": {
+          "visible": false
+        },
+        "frame:bogie_left": {
+          "visible": false
+        },
+        "frame:bogie_right": {
+          "visible": false
+        },
+        "frame:wheel_front_left": {
+          "visible": false
+        },
+        "frame:wheel_middle_left": {
+          "visible": false
+        },
+        "frame:wheel_rear_left": {
+          "visible": false
+        },
+        "frame:wheel_front_right": {
+          "visible": false
+        },
+        "frame:wheel_middle_right": {
+          "visible": false
+        },
+        "frame:wheel_rear_right": {
+          "visible": false
         }
       },
       "topics": {
@@ -89,6 +119,14 @@
           "size": 60,
           "divisions": 12,
           "layerId": "foxglove.Grid"
+        },
+        "rover": {
+          "visible": true,
+          "label": "Rover",
+          "layerId": "foxglove.Urdf",
+          "sourceType": "topic",
+          "topic": "/robot_description",
+          "displayMode": "visual"
         }
       },
       "publish": {

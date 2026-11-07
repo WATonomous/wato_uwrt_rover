@@ -25,12 +25,14 @@ rocker:
   front_wheel: [0.45, -0.28]  # (x, z) of the front wheel center relative to the rocker pivot
   bogie_pivot: [-0.25, -0.13]  # (x, z) of the bogie pivot relative to the rocker pivot
   joint_limit: 0.45  # rad, hard stop in the simulated joint
+  damping: 15.0  # N m s / rad, pivot friction: keeps bumps from turning into swings
   mass: 2.0
 
 bogie:
   half_length: 0.25  # middle / rear wheel x offset from the bogie pivot
   drop: 0.15  # wheel centers sit this far below the bogie pivot
   joint_limit: 0.60  # rad
+  damping: 10.0  # N m s / rad
   mass: 1.5
 
 differential:

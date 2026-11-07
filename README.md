@@ -50,7 +50,7 @@ SCENARIO=manual ./watod up
 
 | What you see | Meaning |
 | --- | --- |
-| Grey box with a label above it | The rover; the label says which goal it is on and how far away it is |
+| The rover model (body, mast, rockers, bogies, six wheels) | Drawn from its URDF with live joint angles, so you can watch the suspension articulate. The label above it says which goal it is on and how far away it is |
 | Magenta pillar "GOAL n" | The waypoint it is driving to. Orange: upcoming waypoints. Grey: reached |
 | Cyan line | The global route: cheapest path to the goal on the cost-to-go grid |
 | Thick green line | The candidate path ENav chose this cycle; the rover drives its first arc |
@@ -141,7 +141,7 @@ Each cycle (2 Hz), while the rover is still driving the previous arc:
 | Stall | commanded wheel turning, measured wheel not, for 2 s |
 | No safe path | ENav found no safe path for 10 cycles in a row |
 
-On a fault the rover stops. With `auto_recover`, slip, suspension and stall faults make it back out 1 m and report a 1.5 m keep-out zone to ENav. A no-safe-path fault triggers a panorama. After `max_recoveries` attempts it waits for the ground. 30 s of fault-free driving restores the budget.
+On a fault the rover stops. With `auto_recover` it retraces its own trail backwards for up to 1 m (ground it has just driven over, so no blind turns). For slip, suspension and stall faults it also reports a 1.5 m keep-out zone to ENav. The 360° panorama only happens once, at startup on the flat landing pad: it is a blind turn ACE never checks. After `max_recoveries` attempts it waits for the ground. 30 s of fault-free driving restores the budget.
 
 ## Measured results
 

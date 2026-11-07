@@ -57,6 +57,23 @@ def nodes(context):
         )
         for pkg, exe, name in SIM_NODES
     ]
+    # The rover model for visualization: URDF on /robot_description, TF for every link from
+    # /joint_states (wheels spin, rockers and bogies articulate).
+    urdf = os.path.join(
+        get_package_share_directory("rover_description"),
+        "models",
+        "rover",
+        "rover.urdf",
+    )
+    with open(urdf) as f:
+        out.append(
+            Node(
+                package="robot_state_publisher",
+                executable="robot_state_publisher",
+                parameters=[{"robot_description": f.read(), "use_sim_time": True}],
+                output="screen",
+            )
+        )
     return out
 
 

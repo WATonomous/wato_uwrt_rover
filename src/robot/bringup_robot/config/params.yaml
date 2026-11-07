@@ -50,7 +50,7 @@ enav:
     step_free: 0.12
     step_lethal: 0.50
     cost_weight: 4.0
-    turn_weight: 0.3
+    turn_weight: 0.8  # m-equivalent per rad of turn in place: prefer arcs over stop-and-turn
     unknown_weight: 0.2
     heading_change_weight: 0.3
     tree_turns_deg: [0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 120.0, -120.0, 150.0, -150.0, 180.0]
@@ -63,7 +63,7 @@ mobility:
   ros__parameters:
     control_rate: 20.0
     lookahead: 0.6
-    turn_start: 0.25
+    turn_start: 0.6  # rad heading error before turning in place; smaller errors are steered out
     turn_done: 0.05
     plan_timeout: 2.0
     no_safe_path_cycles: 10  # consecutive ENav cycles (2 Hz) without a path before faulting
