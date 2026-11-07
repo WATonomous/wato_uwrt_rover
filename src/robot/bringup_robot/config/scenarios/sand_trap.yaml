@@ -1,0 +1,11 @@
+---
+# No keep-out on the dune: its slope passes ACE, but the sand is too loose to climb.
+# Slip detection should stop the rover; auto-recovery backs out, marks the hazard and
+# ENav routes around the dune.
+enav:
+  ros__parameters:
+    waypoints: [-2.0, -4.0, 14.0, 8.0]
+
+mobility:
+  ros__parameters:
+    auto_recover: true

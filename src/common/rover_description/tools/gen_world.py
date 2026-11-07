@@ -293,7 +293,7 @@ def write_obj(path, material, verts, uvs, normals, faces):
     faces = remap.reshape(faces.shape) + 1
     name = os.path.splitext(os.path.basename(path))[0]
     with open(path, "w") as f:
-        f.write(f"mtllib {name}.mtl\no {name}\n")
+        f.write(f"mtllib {material}.mtl\no {name}\n")
         np.savetxt(f, verts[used], fmt="v %.4f %.4f %.4f")
         np.savetxt(f, uvs[used], fmt="vt %.4f %.4f")
         np.savetxt(f, normals[used], fmt="vn %.4f %.4f %.4f")
@@ -307,12 +307,21 @@ def write_mtl(path, material, texture):
 
 
 def terrain_faces(n):
+    """Two triangles per grid quad, plus each triangle's quad tile index (see TILE_QUADS)."""
     i, j = np.meshgrid(np.arange(n - 1), np.arange(n - 1))
     v00 = (j * n + i).ravel()
     v10 = v00 + 1
     v01 = v00 + n
     v11 = v01 + 1
-    return np.stack([np.stack([v00, v10, v11], 1), np.stack([v00, v11, v01], 1)], 1).reshape(-1, 3)
+    faces = np.stack([np.stack([v00, v10, v11], 1), np.stack([v00, v11, v01], 1)], 1).reshape(-1, 3)
+    tiles_per_row = (n - 2) // TILE_QUADS + 1
+    tile = ((j // TILE_QUADS) * tiles_per_row + i // TILE_QUADS).ravel()
+    return faces, np.repeat(tile, 2)
+
+
+# The renderer indexes mesh vertices with 16 bits, so every mesh file must stay under 65536
+# vertices; the terrain is split into tiles of TILE_QUADS x TILE_QUADS quads.
+TILE_QUADS = 100
 
 
 # --------------------------------------------------------------------------- textures
@@ -544,9 +553,12 @@ def rover_sdf(rover):
     )
 
 
-def terrain_sdf(friction):
+def terrain_sdf(surfaces, friction):
+    """One collision + visual per mesh file; friction by surface kind (soil, sand, rock)."""
+    mu_of = {"terrain": friction["soil"], "sand": friction["sand"], "rock": friction["rock"]}
     parts = []
-    for name, mu in (("terrain", friction["soil"]), ("sand", friction["sand"]), ("rocks", friction["rock"])):
+    for name, kind in surfaces:
+        mu = mu_of[kind]
         uri = f"model://mars_terrain/meshes/{name}.obj"
         parts.append(
             f"""
@@ -680,16 +692,21 @@ def main():
 
     gx, gy = np.meshgrid(xs, xs)
     verts = np.stack([gx.ravel(), gy.ravel(), height.ravel()], 1)
-    faces = terrain_faces(n)
+    faces, face_tile = terrain_faces(n)
     normals = vertex_normals(verts, faces)
     centroid_sand = sand.ravel()[faces].sum(1) >= 2
     tex = cfg["textures"]
-    for name, mask, tile in (
+    surfaces = []  # (mesh name, surface kind)
+    for kind, mask, texture_tile in (
         ("terrain", ~centroid_sand, tex["soil_tile"]),
         ("sand", centroid_sand, tex["sand_tile"]),
     ):
-        write_obj(os.path.join(mesh_dir, f"{name}.obj"), name, verts, verts[:, :2] / tile, normals, faces[mask])
-        write_mtl(os.path.join(mesh_dir, f"{name}.mtl"), name, f"{name}.jpg")
+        write_mtl(os.path.join(mesh_dir, f"{kind}.mtl"), kind, f"{kind}.jpg")
+        for t in np.unique(face_tile[mask]):
+            name = f"{kind}_{t:02d}"
+            tile_faces = faces[mask & (face_tile == t)]
+            write_obj(os.path.join(mesh_dir, f"{name}.obj"), kind, verts, verts[:, :2] / texture_tile, normals, tile_faces)
+            surfaces.append((name, kind))
     rock_uv = np.stack([rock_verts[:, 0] + rock_verts[:, 1], rock_verts[:, 2]], 1) / 0.6
     write_obj(
         os.path.join(mesh_dir, "rocks.obj"),
@@ -700,6 +717,8 @@ def main():
         rock_faces,
     )
     write_mtl(os.path.join(mesh_dir, "rocks.mtl"), "rocks", "rocks.jpg")
+    assert len(rock_verts) < 65536, "rocks.obj needs splitting: the renderer uses 16-bit vertex indices"
+    surfaces.append(("rocks", "rock"))
 
     make_texture(rng, tex["soil_px"], (0.62, 0.40, 0.26), 0.30, 1.4, 6000).save(
         os.path.join(mesh_dir, "terrain.jpg"), quality=90
@@ -711,7 +730,7 @@ def main():
         os.path.join(mesh_dir, "rocks.jpg"), quality=90
     )
     with open(os.path.join(terrain_dir, "model.sdf"), "w") as f:
-        f.write(terrain_sdf(cfg["friction"]))
+        f.write(terrain_sdf(surfaces, cfg["friction"]))
     write_model_config(terrain_dir, "mars_terrain")
 
     rover_dir = os.path.join(args.out, "models", "rover")

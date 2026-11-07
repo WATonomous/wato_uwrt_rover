@@ -1,0 +1,90 @@
+---
+# Default parameters for every node. Rover geometry and limits live in
+# rover_description/config/rover.yaml; scenario files override goals and recovery.
+
+localization:
+  ros__parameters:
+    gravity: 3.721
+    kp_gravity: 1.0  # 1/s, pull roll/pitch toward the accelerometer's "up"
+    ki_gravity: 0.02  # gyro bias integral from gravity
+    k_sun: 0.5  # fraction of the sun-heading error removed per sun fix
+    ki_sun: 0.2  # gyro bias integral from the sun
+    slip_window: 0.6  # m of wheel travel in the slip estimate
+    slip_min_distance: 0.25  # m before the estimate is valid
+    slip_max_age: 6.0  # s
+
+visual_odometry:
+  ros__parameters:
+    features: 600
+    fast_threshold: 8
+    match_ratio: 0.8
+    min_inliers: 20
+    min_depth: 0.3
+    max_depth: 8.0
+    max_step: 0.5  # m between frames; more than this is a bad match
+
+sun_sensor:
+  ros__parameters:
+    rate: 1.0
+    noise: 0.005  # rad
+
+enav:
+  ros__parameters:
+    map_resolution: 0.05
+    map_cells: 320  # 16 m rover-centric height map
+    recenter_margin: 3.0
+    depth_stride: 1
+    max_range: 7.0
+    footprint_radius: 0.75  # assume flat ground only where the wheels stand (camera blind spot)
+    plan_rate: 2.0
+    goal_tolerance: 1.0
+    max_ace_paths: 400
+    hazard_radius: 1.0
+    slope_free_deg: 8.0
+    slope_lethal_deg: 22.0
+    # Route cost only: rocks the rover might straddle are costly, boulders are forbidden.
+    # ACE makes the actual "can I drive over this" decision.
+    step_free: 0.12
+    step_lethal: 0.50
+    cost_weight: 4.0
+    turn_weight: 0.3
+    unknown_weight: 0.2
+    heading_change_weight: 0.3
+    tree_turns_deg: [0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 120.0, -120.0, 150.0, -150.0, 180.0]
+    tree_curvatures: [0.0, 0.2, -0.2, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6]
+    tree_segment_length: 1.2
+    tree_step: 0.1
+    tree_turn_step_deg: 15.0
+
+mobility:
+  ros__parameters:
+    control_rate: 20.0
+    lookahead: 0.6
+    turn_start: 0.25
+    turn_done: 0.05
+    plan_timeout: 2.0
+    no_safe_path_cycles: 10  # consecutive ENav cycles (2 Hz) without a path before faulting
+    startup_panorama: true
+    auto_recover: false
+    max_recoveries: 3
+    backout_distance: 1.0
+    backout_speed: 0.15
+    hazard_ahead: 0.6
+
+global_localization:
+  ros__parameters:
+    initial_offset: [0.7, -0.5, 0.0]  # deliberate landing-site error: x, y (m), yaw (rad)
+    trigger_distance: 8.0
+    retry_period: 5.0
+    search_xy: 2.0
+    search_yaw_deg: 3.0
+    coarse_xy_step: 0.25
+    coarse_yaw_step_deg: 1.0
+    fine_xy_step: 0.05
+    fine_yaw_step_deg: 0.25
+    min_points: 300
+    min_relief: 0.05
+    min_score: 0.6
+    min_peak_ratio: 2.0
+    peak_separation: 1.0
+    tf_rate: 20.0

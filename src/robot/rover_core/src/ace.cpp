@@ -143,7 +143,7 @@ AceMaps buildAceMaps(const RoverParams & p, const Grid<float> & elevation)
   const double res = elevation.resolution;
   const int inner = std::max(1, static_cast<int>(std::lround(p.wheel_width / 2.0 / res)));
   const int outer = static_cast<int>(std::ceil((p.wheel_width / 2.0 + p.ace.wheel_margin) / res));
-  const int belly = static_cast<int>(std::ceil(p.body_width / 2.0 / res));
+  const int belly = static_cast<int>(std::ceil(p.body_width / 4.0 / res));
   return {maxFilter(elevation, inner), maxFilter(elevation, outer), maxFilter(elevation, belly)};
 }
 
@@ -164,16 +164,21 @@ AceResult evaluatePose(const RoverParams & p, const AceMaps & maps, const Pose2 
     }
   }
 
-  // Three disks of radius body_width / 2 along the centerline cover the belly footprint.
-  const double d = (p.body_length - p.body_width) / 2.0;
+  // A 4 x 2 grid of small windows covers the belly footprint. Small windows matter: at any
+  // heading their corners stay inside the body, so rocks under the wheels never count as
+  // "under the belly".
+  const double dx = p.body_length / 8.0;
+  const double dy = p.body_width / 4.0;
   float belly = -kLethal;
-  for (double bx : {-d, 0.0, d}) {
-    double wx;
-    double wy;
-    transformPoint(pose, bx, 0.0, wx, wy);
-    const float v = maps.belly.valueAt(wx, wy, kUnknown);
-    if (std::isnan(v)) return AceResult::kUnknown;
-    belly = std::max(belly, v);
+  for (double bx : {-3.0 * dx, -dx, dx, 3.0 * dx}) {
+    for (double by : {-dy, dy}) {
+      double wx;
+      double wy;
+      transformPoint(pose, bx, by, wx, wy);
+      const float v = maps.belly.valueAt(wx, wy, kUnknown);
+      if (std::isnan(v)) return AceResult::kUnknown;
+      belly = std::max(belly, v);
+    }
   }
   return classify(p, aceBounds(p, ground, belly));
 }

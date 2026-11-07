@@ -1,0 +1,11 @@
+---
+# Straight through the dense rock field: ENav has to thread between rocks it can't straddle.
+# If it boxes itself in, auto-recovery looks around (panorama) or backs out and retries;
+# set auto_recover to false to require /mobility/clear_fault instead.
+enav:
+  ros__parameters:
+    waypoints: [-2.0, -4.0]
+
+mobility:
+  ros__parameters:
+    auto_recover: true

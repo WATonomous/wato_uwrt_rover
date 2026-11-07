@@ -44,7 +44,7 @@ struct MatchConfig
   double fine_xy_step;
   double fine_yaw_step;
   int min_points;
-  double min_relief;  // m, std of local heights; flat ground cannot be matched
+  double min_relief;  // m, rms of local heights about their best-fit plane; flat ground cannot be matched
   double min_score;  // normalized cross-correlation of the best match
   // Distinctness: (1 - runner_up) / (1 - best) must reach this. Smooth terrain gives broad
   // correlation peaks, so a ratio of "misfits" separates true peaks better than a score margin.
@@ -63,7 +63,8 @@ struct MatchResult
 };
 
 // Search corrections (dx, dy, dyaw) to `guess` that maximise the normalized cross-correlation
-// between local heights and the DEM. The yaw correction rotates about the points' centroid.
+// between local heights and the DEM, both with their best-fit plane removed. The yaw
+// correction rotates about the points' centroid.
 MatchResult matchTerrain(
   const std::vector<TerrainPoint> & points, const Grid<float> & dem, const Pose2 & guess, const MatchConfig & cfg);
 

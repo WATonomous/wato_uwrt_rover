@@ -1,0 +1,11 @@
+---
+# Long traverse around the map: tests navigation, odometry drift and orbital fixes.
+enav:
+  ros__parameters:
+    waypoints: [-16.0, 10.0, 0.0, 22.0, 10.0, 20.0, 22.0, 4.0, 14.0, -14.0, 0.0, -20.0]
+    # [x, y, radius, ...]: ground planners saw the sand dune from orbit and ruled it out
+    keep_out: [6.0, 0.0, 3.5, 2.5, 3.5, 3.5, 9.5, -3.5, 3.5]
+
+mobility:
+  ros__parameters:
+    auto_recover: true

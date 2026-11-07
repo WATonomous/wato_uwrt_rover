@@ -73,7 +73,7 @@ struct AceMaps
 {
   Grid<float> wheel_inner;  // window covering the wheel contact patch
   Grid<float> wheel_outer;  // contact patch plus pose uncertainty
-  Grid<float> belly;  // window covering a disk of radius body_width / 2
+  Grid<float> belly;  // small window, sampled on a 4 x 2 grid under the body
 };
 
 AceMaps buildAceMaps(const RoverParams & p, const Grid<float> & elevation);

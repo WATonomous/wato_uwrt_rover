@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <array>
 #include <vector>
 
 #include "rover_core/ace.hpp"
@@ -85,7 +86,8 @@ Grid<float> combineCost(const Grid<float> & orbital, const Grid<float> & observe
 
 // Dijkstra from the goal over an 8-connected grid: cost-to-go in metres-equivalent for every
 // cell, kLethal where the goal is unreachable. One search answers every candidate endpoint.
-Grid<float> costToGo(const Grid<float> & cost, double goal_x, double goal_y, double cost_weight);
+// Every passable cell within goal_radius of the goal is a source.
+Grid<float> costToGo(const Grid<float> & cost, double goal_x, double goal_y, double goal_radius, double cost_weight);
 
 // ------------------------------------------------------------------ planner
 
@@ -123,6 +125,7 @@ struct PlanResult
   double commit_length{0.0};
   std::vector<RankedPath> ranked;  // all survivors, best first
   std::vector<int> ace_rejected;  // indices ACE rejected, in evaluation order
+  std::array<int, 6> rejections{};  // count per AceResult of the pose that rejected each path
 };
 
 // Rank every candidate with cheap heuristics (route cost + cost-to-go at the endpoint), then

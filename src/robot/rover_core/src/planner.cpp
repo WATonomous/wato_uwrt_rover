@@ -27,6 +27,8 @@ namespace rover_core
 namespace
 {
 
+constexpr double kLethalCheckStart = 0.5;  // m along a path before lethal route cells reject it
+
 PathPose arcPose(const PathPose & start, double k, double ds)
 {
   if (std::abs(k) < 1e-9) {
@@ -147,17 +149,27 @@ Grid<float> combineCost(const Grid<float> & orbital, const Grid<float> & observe
   return cost;
 }
 
-Grid<float> costToGo(const Grid<float> & cost, double goal_x, double goal_y, double cost_weight)
+Grid<float> costToGo(const Grid<float> & cost, double goal_x, double goal_y, double goal_radius, double cost_weight)
 {
   Grid<float> ctg(cost.resolution, cost.origin_x, cost.origin_y, cost.width, cost.height, kLethal);
-  int gi;
-  int gj;
-  if (!cost.cellOf(goal_x, goal_y, gi, gj) || std::isinf(cost.at(gi, gj))) return ctg;
-
   using Item = std::pair<float, int>;
   std::priority_queue<Item, std::vector<Item>, std::greater<Item>> open;
-  ctg.at(gi, gj) = 0.0f;
-  open.push({0.0f, gj * cost.width + gi});
+
+  // Seed every passable cell within the goal radius (or the goal cell itself), so a rock
+  // sitting exactly on the goal does not make the whole goal unreachable.
+  const int r = static_cast<int>(std::ceil(goal_radius / cost.resolution));
+  int gi;
+  int gj;
+  cost.cellOf(goal_x, goal_y, gi, gj);
+  for (int j = gj - r; j <= gj + r; ++j) {
+    for (int i = gi - r; i <= gi + r; ++i) {
+      if (!cost.contains(i, j) || std::isinf(cost.at(i, j))) continue;
+      const double d = std::hypot(cost.cellX(i) - goal_x, cost.cellY(j) - goal_y);
+      if (d > std::max(goal_radius, cost.resolution)) continue;
+      ctg.at(i, j) = static_cast<float>(d);
+      open.push({ctg.at(i, j), j * cost.width + i});
+    }
+  }
   const int di[8] = {1, -1, 0, 0, 1, 1, -1, -1};
   const int dj[8] = {0, 0, 1, -1, 1, -1, 1, -1};
   while (!open.empty()) {
@@ -211,10 +223,13 @@ PlanResult plan(
       double my;
       transformPoint(in.map_from_odom, poses[k].x, poses[k].y, mx, my);
       const float c = in.cost->valueAt(mx, my, kLethal);
-      if (std::isinf(c)) {
+      // The rover may already stand in a coarse lethal cell (e.g. a blurred orbital rock);
+      // ACE, not the route cost, decides whether it can drive out of it.
+      if (std::isinf(c) && poses[k].s >= kLethalCheckStart) {
         lethal = true;
         break;
       }
+      if (std::isinf(c)) continue;
       if (k > static_cast<size_t>(path.turn_poses)) {
         total += (poses[k].s - poses[k - 1].s) * (1.0 + cost_weight * c);
       }
@@ -245,16 +260,19 @@ PlanResult plan(
     ++result.ace_evaluations;
     const CandidatePath & path = tree[ranked.index];
     const std::vector<PathPose> poses = toOdom(path, in.rover);
-    bool safe = true;
-    for (size_t k = 0; k < poses.size(); ++k) {
+    AceResult verdict = AceResult::kSafe;
+    // Pose 0 is where the rover already stands: its real suspension state is measured (and
+    // guarded by fault protection), so only the poses it would move into are checked.
+    for (size_t k = 1; k < poses.size(); ++k) {
       const AceResult r = evaluatePose(p, maps, {poses[k].x, poses[k].y, poses[k].yaw});
       if (r == AceResult::kSafe) continue;
       // Terrain beyond the committed part may still be unseen; it is checked on a later cycle.
-      safe = r == AceResult::kUnknown && static_cast<int>(k) >= path.commit_end;
+      if (r != AceResult::kUnknown || static_cast<int>(k) < path.commit_end) verdict = r;
       break;
     }
-    if (!safe) {
+    if (verdict != AceResult::kSafe) {
       result.ace_rejected.push_back(ranked.index);
+      ++result.rejections[static_cast<size_t>(verdict)];
       continue;
     }
     result.found = true;

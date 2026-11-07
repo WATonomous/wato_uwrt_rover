@@ -60,19 +60,28 @@ TEST(CostToGo, RoutesAroundWalls)
 {
   Grid<float> cost(0.25, 0.0, 0.0, 40, 40, 0.0f);
   for (int j = 0; j < 35; ++j) cost.at(20, j) = kLethal;  // wall with a gap at the top
-  const Grid<float> ctg = costToGo(cost, 9.0, 1.0, 4.0);  // goal right of the wall
+  const Grid<float> ctg = costToGo(cost, 9.0, 1.0, 0.0, 4.0);  // goal right of the wall
   const float from_left = ctg.valueAt(1.0, 1.0, kLethal);
   EXPECT_TRUE(std::isfinite(from_left));
   EXPECT_GT(from_left, 14.0);  // straight line is 8 m; the route detours around the wall's end
-  EXPECT_NEAR(ctg.valueAt(9.0, 1.0, kLethal), 0.0f, 1e-6);
+  EXPECT_LT(ctg.valueAt(9.0, 1.0, kLethal), 0.2f);  // seeded with the distance to the goal
 
   // Fully enclosed goal: everything outside is unreachable.
   Grid<float> boxed(0.25, 0.0, 0.0, 40, 40, 0.0f);
   for (int k = 10; k <= 20; ++k) {
     boxed.at(k, 10) = boxed.at(k, 20) = boxed.at(10, k) = boxed.at(20, k) = kLethal;
   }
-  const Grid<float> unreachable = costToGo(boxed, 3.75, 3.75, 4.0);
+  const Grid<float> unreachable = costToGo(boxed, 3.75, 3.75, 0.0, 4.0);
   EXPECT_TRUE(std::isinf(unreachable.valueAt(1.0, 1.0, 0.0f)));
+
+  // A lethal cell exactly on the goal: the cells around it within the radius are sources.
+  Grid<float> rock_on_goal(0.25, 0.0, 0.0, 40, 40, 0.0f);
+  int i;
+  int j;
+  rock_on_goal.cellOf(5.0, 5.0, i, j);
+  rock_on_goal.at(i, j) = kLethal;
+  EXPECT_TRUE(std::isinf(costToGo(rock_on_goal, 5.0, 5.0, 0.0, 4.0).valueAt(1.0, 1.0, 0.0f)));
+  EXPECT_TRUE(std::isfinite(costToGo(rock_on_goal, 5.0, 5.0, 1.0, 4.0).valueAt(1.0, 1.0, kLethal)));
 }
 
 TEST(OrbitalCost, SlopeThresholds)
@@ -99,7 +108,7 @@ struct World
 PlanResult planTo(const World & w, double gx, double gy, const std::vector<CandidatePath> & tree)
 {
   World copy = w;
-  copy.ctg = costToGo(copy.cost, gx, gy, 4.0);
+  copy.ctg = costToGo(copy.cost, gx, gy, 0.5, 4.0);
   const PlanInputs in{{0, 0, 0}, {0, 0, 0}, &copy.elevation, &copy.cost, &copy.ctg, false, 0.0};
   return plan(loadRoverParams(roverConfigPath()), tree, in, {0.3, 0.2, 0.3}, 4.0, 200);
 }

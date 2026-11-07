@@ -69,7 +69,7 @@ ace_limits:
   rocker: 0.35  # rad, rocker angle relative to body
   bogie: 0.50  # rad, bogie angle relative to rocker
   belly_clearance: 0.08  # m, minimum belly clearance
-  wheel_margin: 0.05  # m, position uncertainty added around each wheel patch
+  wheel_margin: 0.03  # m, position uncertainty added around each wheel patch
 
 # Fault protection: the rover stops when any of these is exceeded.
 fault_limits:
