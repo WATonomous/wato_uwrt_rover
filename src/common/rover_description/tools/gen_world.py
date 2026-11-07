@@ -418,6 +418,19 @@ def beam_visual(name, p0, p1, y, color):
     )
 
 
+def navcam_mount(cam):
+    """(head_x, head_z, mast_top) in base_link for the navcam head box and the mast under it.
+
+    The head sits 7 cm behind the lens so the camera never sees its own housing. The mast stops
+    inside the head, behind the lens: geometry at the lens itself (view depth ~0) makes Gazebo's
+    ogre2 depth pass, which clamps rather than clips at the near plane, cover the frame at the
+    near plane, so the depth image comes out empty and the RGB-D colour image is background only.
+    """
+    head_x = cam["x"] - 0.07 * math.cos(cam["pitch"])
+    head_z = cam["z"] + 0.07 * math.sin(cam["pitch"])
+    return head_x, head_z, head_z - 0.035
+
+
 def rover_sdf(rover):
     """Rocker-bogie rover. Every link origin sits on its parent joint, so joint poses are zero."""
     wheel = rover["wheel"]
@@ -445,9 +458,7 @@ def rover_sdf(rover):
     )
     cam = rover["navcam"]
     imu = rover["imu"]
-    # The camera head box sits just behind the lens so the camera never sees its own housing.
-    head_x = cam["x"] - 0.07 * math.cos(cam["pitch"])
-    head_z = cam["z"] + 0.07 * math.sin(cam["pitch"])
+    head_x, head_z, mast_top = navcam_mount(cam)
 
     def noise(stddev, bias=0.0):
         return (
@@ -468,8 +479,8 @@ def rover_sdf(rover):
         <material><ambient>{gray}</ambient><diffuse>{gray}</diffuse></material></visual>
       <collision name='body'><pose>0 0 {body["center_z"]} 0 0 0</pose>
         <geometry><box><size>{body["length"]} {body["width"]} {body["height"]}</size></box></geometry></collision>
-      <visual name='mast'><pose>{cam["x"]} 0 {cam["z"] / 2.0} 0 0 0</pose>
-        <geometry><cylinder><radius>0.025</radius><length>{cam["z"]}</length></cylinder></geometry>
+      <visual name='mast'><pose>{head_x:.4f} 0 {mast_top / 2.0:.4f} 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>{mast_top:.4f}</length></cylinder></geometry>
         <material><ambient>{gray}</ambient><diffuse>{gray}</diffuse></material></visual>
       <visual name='navcam_head'><pose>{head_x:.4f} 0 {head_z:.4f} 0 {cam["pitch"]} 0</pose>
         <geometry><box><size>0.08 0.24 0.07</size></box></geometry>
@@ -611,8 +622,7 @@ def rover_urdf(rover):
     bogie_x = pivot_x + rocker["bogie_pivot"][0]
     bogie_z = rocker["bogie_pivot"][1]
     wheel_z = bogie_z - bogie["drop"]
-    head_x = cam["x"] - 0.07 * math.cos(cam["pitch"])
-    head_z = cam["z"] + 0.07 * math.sin(cam["pitch"])
+    head_x, head_z, mast_top = navcam_mount(cam)
 
     def visual(xyz, rpy, geometry, material):
         return (
@@ -652,9 +662,9 @@ def rover_urdf(rover):
             "body",
         )
         + visual(
-            (cam["x"], 0, cam["z"] / 2.0),
+            (head_x, 0, mast_top / 2.0),
             (0, 0, 0),
-            f'<cylinder radius="0.025" length="{cam["z"]}"/>',
+            f'<cylinder radius="0.025" length="{mast_top:.4f}"/>',
             "frame",
         )
         + visual(
