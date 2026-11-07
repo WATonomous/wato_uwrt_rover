@@ -1,0 +1,81 @@
+---
+# Single source of truth for the rover. Read by the world generator (to build the Gazebo
+# model) and by the autonomy nodes (ACE geometry, fault limits, drive speeds).
+# Frames: base_link is centered on the body at rocker-pivot height, x forward, y left, z up.
+
+wheel:
+  radius: 0.15
+  width: 0.12
+  mass: 2.0
+  friction: 1.0
+
+track_width: 0.90  # distance between left and right wheel centers
+
+body:
+  length: 0.90
+  width: 0.56
+  height: 0.25
+  center_z: 0.005  # body box center relative to base_link
+  mass: 40.0
+
+rocker:
+  pivot_x: 0.05  # rocker pivot x in base_link (pivot z is 0 by definition)
+  front_wheel: [0.45, -0.28]  # (x, z) of the front wheel center relative to the rocker pivot
+  bogie_pivot: [-0.25, -0.13]  # (x, z) of the bogie pivot relative to the rocker pivot
+  joint_limit: 0.45  # rad, hard stop in the simulated joint
+  mass: 2.0
+
+bogie:
+  half_length: 0.25  # middle / rear wheel x offset from the bogie pivot
+  drop: 0.15  # wheel centers sit this far below the bogie pivot
+  joint_limit: 0.60  # rad
+  mass: 1.5
+
+differential:
+  stiffness: 3000.0  # N m / rad, couples left and right rocker angles (theta_l = -theta_r)
+  damping: 60.0  # N m s / rad
+
+navcam:
+  x: 0.35
+  z: 0.85  # above base_link
+  pitch: 0.50  # rad, positive looks down
+  horizontal_fov: 1.5708
+  # 320x240 keeps Gazebo's software renderer (Docker on a Mac has no GPU) at real time.
+  width: 320
+  height: 240
+  rate: 5.0
+  near: 0.3
+  far: 10.0
+
+imu:
+  rate: 50.0
+  gyro_noise: 0.002  # rad/s
+  gyro_bias: 0.0006  # rad/s, mean of the per-axis constant bias
+  accel_noise: 0.02  # m/s^2
+
+sun_sensor:
+  rate: 1.0
+  noise: 0.005  # rad, angular noise of the measured sun direction
+
+drive:
+  speed: 0.25  # m/s nominal forward speed
+  turn_rate: 0.35  # rad/s for turn-in-place
+  max_accel: 0.5  # m/s^2
+
+# Limits the planner (ACE) must respect. Stricter than the fault limits below so a
+# path ACE accepts never trips fault protection on terrain it measured correctly.
+ace_limits:
+  tilt: 0.35  # rad (20 deg) roll or pitch
+  rocker: 0.35  # rad, rocker angle relative to body
+  bogie: 0.50  # rad, bogie angle relative to rocker
+  belly_clearance: 0.08  # m, minimum belly clearance
+  wheel_margin: 0.05  # m, position uncertainty added around each wheel patch
+
+# Fault protection: the rover stops when any of these is exceeded.
+fault_limits:
+  tilt: 0.44  # rad (25 deg)
+  rocker: 0.42  # rad
+  bogie: 0.57  # rad
+  slip: 0.6  # fraction, 1 - d_vo / d_wheel over the slip window
+  stall_ratio: 0.2  # measured / commanded wheel speed below this counts as stalled
+  stall_time: 2.0  # s

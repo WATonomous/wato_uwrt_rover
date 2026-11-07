@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<ignition version='1.0'>
+  <!-- Streams the scene to the Gazebo web viewer (app.gazebosim.org/visualization) -->
+  <plugin name="ignition::launch::WebsocketServer" filename="ignition-launch-websocket-server">
+    <publication_hz>15</publication_hz>
+    <port>9002</port>
+    <max_connections>-1</max_connections>
+  </plugin>
+</ignition>

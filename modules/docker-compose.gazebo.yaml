@@ -14,6 +14,4 @@ services:
     ports:
       - "${GAZEBO_PORT:?}:9002"
     profiles: [deploy, develop]
-    command: /bin/bash -c "ros2 launch gazebo sim.launch.py"
-    volumes:
-      - ../src/gazebo/launch:/root/src/gazebo/launch
+    command: /bin/bash -c "ros2 launch rover_sim sim.launch.py"

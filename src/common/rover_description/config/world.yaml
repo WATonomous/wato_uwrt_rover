@@ -1,0 +1,77 @@
+---
+# Procedural Mars world. The generator turns this into Gazebo meshes plus the
+# "orbital" height map the rover uses for global localization and route costs.
+# Frame: map / Gazebo world, x east, y north, z up, origin at the world center.
+
+seed: 7
+size: 60.0  # m, square world
+resolution: 0.15  # m, terrain mesh vertex spacing
+gravity: 3.721
+
+sun:
+  azimuth_deg: 135.0  # counter-clockwise from +x (east)
+  elevation_deg: 40.0
+
+terrain:
+  rms_height: 0.4  # m, rolling base terrain
+  spectral_slope: 3.0  # power spectrum ~ f^-slope, larger is smoother
+  min_wavelength: 5.0  # m, base terrain has no features shorter than this
+  roughness: 0.015  # m, fine-scale ground roughness
+
+craters:
+  count: 12
+  min_diameter: 3.0
+  max_diameter: 12.0
+  min_depth_ratio: 0.04
+  max_depth_ratio: 0.11
+  rim_ratio: 0.025
+
+# Sand-covered ridges. Gentle enough for ACE to accept, but steeper than sand friction
+# allows the rover to climb, so wheels spin in place: the slip-detection scenario.
+dunes:
+  - x: 6.0
+    y: 0.0
+    yaw_deg: -45.0
+    length: 16.0
+    sigma: 2.2
+    height: 1.2  # max slope ~18 deg: under the ACE tilt limit, above what sand friction allows
+
+rocks:
+  min_diameter: 0.15
+  max_diameter: 1.4
+  background_k: 0.03  # Golombek cumulative fractional area covered by rocks
+  fields:
+    - x: -8.0
+      y: -10.0
+      radius: 5.0
+      k: 0.14
+  boulders:
+    - x: -14.0
+      y: -15.0
+      diameter: 1.3
+    - x: 12.0
+      y: 14.0
+      diameter: 1.2
+
+spawn:
+  x: -22.0
+  y: -22.0
+  yaw_deg: 45.0
+  clear_radius: 3.0
+
+friction:
+  soil: 0.9
+  sand: 0.25
+  rock: 0.9
+
+orbital:
+  resolution: 0.25  # m/px, like HiRISE
+  blur_sigma: 0.3  # m
+  noise_std: 0.02  # m
+
+textures:
+  soil_tile: 8.0  # m covered by one soil texture tile
+  sand_tile: 4.0
+  soil_px: 2048
+  sand_px: 1024
+  rock_px: 512

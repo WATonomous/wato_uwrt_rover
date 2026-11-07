@@ -5,18 +5,10 @@ FROM ${BASE_IMAGE} AS source
 
 WORKDIR ${AMENT_WS}/src
 
-# Copy in source code
-# COPY src/robot/yolo_inference ./yolo_inference
-# COPY src/robot/object_detection object_detection
-COPY src/robot/odometry_spoof odometry_spoof
-COPY src/robot/gps_sim gps_sim
-COPY src/robot/imu_sim imu_sim
-COPY src/robot/localization localization
-COPY src/robot/costmap costmap
-COPY src/robot/map_memory map_memory
-COPY src/robot/planner planner
-COPY src/robot/control control
-COPY src/robot/bringup_robot bringup_robot
+# Copy in source code: shared packages plus every autonomy package
+COPY src/common/rover_msgs rover_msgs
+COPY src/common/rover_description rover_description
+COPY src/robot robot
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -30,11 +22,11 @@ RUN apt-get -qq update && rosdep update && \
 ################################# Dependencies ################################
 FROM ${BASE_IMAGE} AS dependencies
 
-# ADD MORE DEPENDENCIES HERE
-
 # Install Rosdep requirements
 COPY --from=source /tmp/colcon_install_list /tmp/colcon_install_list
-RUN apt-fast install -qq -y --no-install-recommends "$(cat /tmp/colcon_install_list)"
+RUN apt-get update && \
+    xargs -r apt-fast install -qq -y --no-install-recommends < /tmp/colcon_install_list && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy in source code from source stage
 WORKDIR ${AMENT_WS}
@@ -52,7 +44,7 @@ FROM dependencies AS build
 WORKDIR ${AMENT_WS}
 RUN . /opt/ros/"$ROS_DISTRO"/setup.sh && \
     colcon build \
-    --cmake-args -DCMAKE_BUILD_TYPE=Release --install-base "$WATONOMOUS_INSTALL"
+    --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF --install-base "$WATONOMOUS_INSTALL"
 
 # Source and Build Artifact Cleanup
 RUN rm -rf src/* build/* devel/* install/* log/*

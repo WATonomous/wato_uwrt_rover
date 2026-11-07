@@ -6,7 +6,8 @@ FROM ${BASE_IMAGE} AS source
 WORKDIR ${AMENT_WS}/src
 
 # Copy in source code
-COPY src/gazebo gazebo
+COPY src/common/rover_description rover_description
+COPY src/sim/rover_sim rover_sim
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -27,13 +28,15 @@ RUN apt-get update && \
     wget -q https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
     apt-get update && \
-    apt-get install -y --no-install-recommends ros-"$ROS_DISTRO"-ros-gz ignition-fortress && \
+    apt-get install -y --no-install-recommends ros-"$ROS_DISTRO"-ros-gz ignition-fortress libignition-gazebo6-dev \
+      python3-numpy python3-yaml python3-pil && \
     rm -rf /var/lib/apt/lists/*
-ENV GAZEBO_PLUGIN_PATH=/opt/ros/humble/lib
 
 # Install Rosdep requirements
 COPY --from=source /tmp/colcon_install_list /tmp/colcon_install_list
-RUN apt-fast install -qq -y --no-install-recommends "$(cat /tmp/colcon_install_list)"
+RUN apt-get update && \
+    xargs -r apt-fast install -qq -y --no-install-recommends < /tmp/colcon_install_list && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy in source code from source stage
 WORKDIR ${AMENT_WS}
@@ -47,7 +50,7 @@ RUN apt-get -qq autoremove -y && apt-get -qq autoclean && apt-get -qq clean && \
 ################################ Build ################################
 FROM dependencies AS build
 
-# Build ROS2 packages
+# Build ROS2 packages (rover_description generates the world during the build)
 WORKDIR ${AMENT_WS}
 RUN . /opt/ros/"$ROS_DISTRO"/setup.sh && \
     colcon build \
