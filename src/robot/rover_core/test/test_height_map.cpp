@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <gtest/gtest.h>
+
 #include <cmath>
 #include <limits>
 #include <vector>
-
-#include <gtest/gtest.h>
 
 #include "rover_core/height_map.hpp"
 #include "rover_core/params.hpp"
@@ -64,10 +64,18 @@ TEST(HeightMap, MaxFilterIgnoresUnknown)
   Grid<float> g(1.0, 0.0, 0.0, 5, 5, kUnknown);
   g.at(2, 2) = 1.0f;
   g.at(4, 4) = 3.0f;
-  const Grid<float> m = maxFilter(g, 1);
+  const Grid<float> m = maxFilter(g, 1, false);
   EXPECT_FLOAT_EQ(m.at(1, 1), 1.0f);
   EXPECT_FLOAT_EQ(m.at(3, 3), 3.0f);
   EXPECT_TRUE(std::isnan(m.at(0, 4)));
+
+  // Strict: any unknown cell (or the map edge) in the window makes the result unknown.
+  Grid<float> full(1.0, 0.0, 0.0, 5, 5, 0.5f);
+  full.at(3, 3) = kUnknown;
+  const Grid<float> strict = maxFilter(full, 1, true);
+  EXPECT_FLOAT_EQ(strict.at(1, 1), 0.5f);
+  EXPECT_TRUE(std::isnan(strict.at(2, 2)));
+  EXPECT_TRUE(std::isnan(strict.at(0, 2)));
 }
 
 TEST(HeightMap, DepthOfFlatGroundProjectsToTheGround)

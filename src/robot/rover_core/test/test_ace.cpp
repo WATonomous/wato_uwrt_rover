@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <gtest/gtest.h>
+
 #include <array>
 #include <cmath>
 #include <random>
-
-#include <gtest/gtest.h>
 
 #include "rover_core/ace.hpp"
 

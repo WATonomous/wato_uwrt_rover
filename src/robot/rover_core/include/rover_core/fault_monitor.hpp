@@ -53,17 +53,32 @@ struct FaultInputs
 class FaultMonitor
 {
 public:
-  explicit FaultMonitor(const RoverParams::FaultLimits & limits) : limits_(limits) {}
+  explicit FaultMonitor(const RoverParams::FaultLimits & limits)
+  : limits_(limits)
+  {}
 
-  // Returns the first fault found (and why), or kNone. Slip is skipped when check_slip is
-  // false, e.g. while backing out of the sand that caused the slip fault.
-  Fault update(const FaultInputs & in, bool check_slip, std::string & detail);
+  struct Checks
+  {
+    bool slip;
+    bool suspension;
+  };
 
-  void reset() { stall_time_.fill(0.0); }
+  // Returns the first fault found (and why), or kNone. Tilt and stall are always checked;
+  // slip and suspension can be skipped, e.g. while backing out of the hazard that tripped them.
+  Fault update(const FaultInputs & in, const Checks & checks, std::string & detail);
+
+  void reset()
+  {
+    stall_time_.fill(0.0);
+    tilt_time_ = 0.0;
+    suspension_time_ = 0.0;
+  }
 
 private:
   RoverParams::FaultLimits limits_;
   std::array<double, 6> stall_time_{};
+  double tilt_time_{0.0};
+  double suspension_time_{0.0};
 };
 
 }  // namespace rover_core

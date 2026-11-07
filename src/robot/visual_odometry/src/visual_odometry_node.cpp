@@ -17,15 +17,17 @@
 // the motion. Perseverance runs the equivalent on an FPGA, which is what lets it do VO
 // continuously while driving.
 
-#include <cmath>
-#include <memory>
-#include <optional>
-#include <vector>
-
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
+
+#include <cmath>
+#include <memory>
+#include <optional>
+#include <utility>
+#include <vector>
+
 #include <opencv2/features2d.hpp>
 #include <opencv2/imgproc.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -42,17 +44,24 @@ class VisualOdometryNode : public rclcpp::Node
 {
 public:
   VisualOdometryNode()
-  : Node("visual_odometry"),
-    base_from_optical_(rover_core::loadRoverParams(rover_core::roverConfigPath()).navcamOptical()),
-    max_depth_(declare_parameter("max_depth", 8.0)),
-    min_depth_(declare_parameter("min_depth", 0.3)),
-    ratio_(declare_parameter("match_ratio", 0.8)),
-    min_inliers_(declare_parameter("min_inliers", 20)),
-    max_step_(declare_parameter("max_step", 0.5)),
-    orb_(cv::ORB::create(
-      declare_parameter("features", 600), 1.2f, 6, 15, 0, 2, cv::ORB::HARRIS_SCORE, 15,
-      declare_parameter("fast_threshold", 8))),
-    matcher_(cv::NORM_HAMMING)
+  : Node("visual_odometry")
+  , base_from_optical_(rover_core::loadRoverParams(rover_core::roverConfigPath()).navcamOptical())
+  , max_depth_(declare_parameter("max_depth", 8.0))
+  , min_depth_(declare_parameter("min_depth", 0.3))
+  , ratio_(declare_parameter("match_ratio", 0.8))
+  , min_inliers_(declare_parameter("min_inliers", 20))
+  , max_step_(declare_parameter("max_step", 0.5))
+  , orb_(cv::ORB::create(
+      declare_parameter("features", 600),
+      1.2f,
+      6,
+      15,
+      0,
+      2,
+      cv::ORB::HARRIS_SCORE,
+      15,
+      declare_parameter("fast_threshold", 8)))
+  , matcher_(cv::NORM_HAMMING)
   {
     pub_ = create_publisher<rover_msgs::msg::VisualOdometry>("/visual_odometry", 10);
     info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(

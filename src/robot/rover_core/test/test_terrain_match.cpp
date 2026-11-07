@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <gtest/gtest.h>
+
 #include <cmath>
 #include <random>
 #include <vector>
-
-#include <gtest/gtest.h>
 
 #include "rover_core/terrain_match.hpp"
 
@@ -25,7 +25,8 @@ namespace rover_core
 namespace
 {
 
-const MatchConfig kConfig{2.0, 3.0 * M_PI / 180.0, 0.25, M_PI / 180.0, 0.05, 0.25 * M_PI / 180.0, 200, 0.05, 0.5, 2.0, 1.0};
+const MatchConfig kConfig{
+  2.0, 3.0 * M_PI / 180.0, 0.25, M_PI / 180.0, 0.05, 0.25 * M_PI / 180.0, 200, 0.05, 0.5, 2.0, 1.0};
 
 // Smooth terrain: a sum of random Gaussian bumps, 0.25 m DEM over a 40 m square.
 Grid<float> bumpyDem()
@@ -71,8 +72,8 @@ TEST(TerrainMatch, RecoversAnOffsetOdomFrame)
   const Pose2 truth{3.0, -2.0, 0.6};
   const Pose2 guess{3.0 + 0.8, -2.0 - 0.6, 0.6 + 0.02};
   const MatchResult r = matchTerrain(observe(dem, truth, 1.7), dem, guess, kConfig);
-  ASSERT_TRUE(r.accepted) << "score " << r.score << " runner-up " << r.runner_up << " relief " << r.relief
-                          << " at " << r.map_from_odom.x << ", " << r.map_from_odom.y;
+  ASSERT_TRUE(r.accepted) << "score " << r.score << " runner-up " << r.runner_up << " relief " << r.relief << " at "
+                          << r.map_from_odom.x << ", " << r.map_from_odom.y;
   EXPECT_GT(r.score, 0.95);
   EXPECT_NEAR(r.map_from_odom.x, truth.x, 0.1);
   EXPECT_NEAR(r.map_from_odom.y, truth.y, 0.1);

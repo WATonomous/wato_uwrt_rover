@@ -39,12 +39,20 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            SetEnvironmentVariable("IGN_GAZEBO_RESOURCE_PATH", os.path.join(description, "models")),
             SetEnvironmentVariable(
-                "IGN_GAZEBO_SYSTEM_PLUGIN_PATH", os.path.join(get_package_prefix("rover_sim"), "lib")
+                "IGN_GAZEBO_RESOURCE_PATH", os.path.join(description, "models")
             ),
-            ExecuteProcess(cmd=["ign", "gazebo", "-s", "-r", "-v", "3", world], output="screen"),
-            ExecuteProcess(cmd=["ign", "launch", os.path.join(sim_share, "launch", "sim.ign")], output="screen"),
+            SetEnvironmentVariable(
+                "IGN_GAZEBO_SYSTEM_PLUGIN_PATH",
+                os.path.join(get_package_prefix("rover_sim"), "lib"),
+            ),
+            ExecuteProcess(
+                cmd=["ign", "gazebo", "-s", "-r", "-v", "3", world], output="screen"
+            ),
+            ExecuteProcess(
+                cmd=["ign", "launch", os.path.join(sim_share, "launch", "sim.ign")],
+                output="screen",
+            ),
             Node(
                 package="ros_gz_bridge",
                 executable="parameter_bridge",

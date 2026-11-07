@@ -14,9 +14,8 @@
 
 #pragma once
 
-#include <vector>
-
 #include <Eigen/Geometry>
+#include <vector>
 
 #include "rover_core/grid.hpp"
 
@@ -34,8 +33,14 @@ struct CameraIntrinsics
 // Back-project every `stride`-th depth pixel into the target frame.
 // depth: row-major metres along the optical axis; target_from_optical: optical frame pose.
 std::vector<Eigen::Vector3f> depthToPoints(
-  const float * depth, int width, int height, const CameraIntrinsics & k, const Eigen::Isometry3d & target_from_optical,
-  int stride, double min_depth, double max_depth);
+  const float * depth,
+  int width,
+  int height,
+  const CameraIntrinsics & k,
+  const Eigen::Isometry3d & target_from_optical,
+  int stride,
+  double min_depth,
+  double max_depth);
 
 // Rover-centric 2.5D height map in the odom frame. Each cell stores the top surface height
 // from the most recent frame that observed it ("overwrite on observe"), so slow odometry
@@ -56,7 +61,10 @@ public:
   // spot below the mast camera.
   void stampFootprint(const Eigen::Isometry3d & odom_from_base, double pivot_height, double radius);
 
-  const Grid<float> & elevation() const { return elevation_; }
+  const Grid<float> & elevation() const
+  {
+    return elevation_;
+  }
 
 private:
   Grid<float> elevation_;
@@ -64,7 +72,8 @@ private:
 };
 
 // Max of known cells in a (2r + 1)^2 window around each cell; NaN where the window holds no
-// known cell. ACE uses these to bound wheel and belly contact heights in O(1) per lookup.
-Grid<float> maxFilter(const Grid<float> & g, int r);
+// known cell, or (require_all_known) any unknown cell. ACE uses these to bound wheel and
+// belly contact heights in O(1) per lookup.
+Grid<float> maxFilter(const Grid<float> & g, int r, bool require_all_known);
 
 }  // namespace rover_core

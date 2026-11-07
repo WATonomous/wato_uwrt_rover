@@ -18,6 +18,8 @@
 //   slip      = 1 - VO distance / wheel distance
 // Publishes odom -> base_link. Global corrections (map -> odom) come from global_localization.
 
+#include <tf2_ros/transform_broadcaster.h>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -32,7 +34,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
-#include <tf2_ros/transform_broadcaster.h>
 
 #include "rover_core/params.hpp"
 #include "rover_core/state_estimation.hpp"
@@ -48,8 +49,12 @@ constexpr double kWheelMotionEpsilon = 1e-4;  // rad between joint_states messag
 constexpr double kStationaryTime = 0.3;  // s without wheel motion before VO is ignored
 
 const std::array<std::string, 6> kWheelJoints = {
-  "wheel_front_left_joint",  "wheel_middle_left_joint",  "wheel_rear_left_joint",
-  "wheel_front_right_joint", "wheel_middle_right_joint", "wheel_rear_right_joint"};
+  "wheel_front_left_joint",
+  "wheel_middle_left_joint",
+  "wheel_rear_left_joint",
+  "wheel_front_right_joint",
+  "wheel_middle_right_joint",
+  "wheel_rear_right_joint"};
 
 Eigen::Vector3d toEigen(const geometry_msgs::msg::Vector3 & v)
 {
@@ -62,25 +67,31 @@ class LocalizationNode : public rclcpp::Node
 {
 public:
   LocalizationNode()
-  : Node("localization"),
-    rover_(rover_core::loadRoverParams(rover_core::roverConfigPath())),
-    sun_world_(rover_core::loadWorldParams(rover_core::worldConfigPath()).sunDirection()),
-    attitude_(AttitudeFilter::Gains{
-      declare_parameter("gravity", 3.721), declare_parameter("kp_gravity", 1.0), declare_parameter("ki_gravity", 0.02),
-      declare_parameter("k_sun", 0.5), declare_parameter("ki_sun", 0.2)}),
-    slip_(
-      declare_parameter("slip_window", 0.6), declare_parameter("slip_min_distance", 0.25),
-      declare_parameter("slip_max_age", 6.0)),
-    odom_frame_(declare_parameter<std::string>("odom_frame", "odom")),
-    base_frame_(declare_parameter<std::string>("base_frame", "base_link")),
-    tf_(this)
+  : Node("localization")
+  , rover_(rover_core::loadRoverParams(rover_core::roverConfigPath()))
+  , sun_world_(rover_core::loadWorldParams(rover_core::worldConfigPath()).sunDirection())
+  , attitude_(AttitudeFilter::Gains{
+      declare_parameter("gravity", 3.721),
+      declare_parameter("kp_gravity", 1.0),
+      declare_parameter("ki_gravity", 0.02),
+      declare_parameter("k_sun", 0.5),
+      declare_parameter("ki_sun", 0.2)})
+  , slip_(
+      declare_parameter("slip_window", 0.6),
+      declare_parameter("slip_min_distance", 0.25),
+      declare_parameter("slip_max_age", 6.0))
+  , odom_frame_(declare_parameter<std::string>("odom_frame", "odom"))
+  , base_frame_(declare_parameter<std::string>("base_frame", "base_link"))
+  , tf_(this)
   {
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
     slip_pub_ = create_publisher<rover_msgs::msg::SlipEstimate>("/localization/slip", 10);
     imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
       "/imu", rclcpp::SensorDataQoS(), [this](sensor_msgs::msg::Imu::ConstSharedPtr m) { onImu(*m); });
     joint_sub_ = create_subscription<sensor_msgs::msg::JointState>(
-      "/joint_states", rclcpp::SensorDataQoS(), [this](sensor_msgs::msg::JointState::ConstSharedPtr m) { onJoints(*m); });
+      "/joint_states", rclcpp::SensorDataQoS(), [this](sensor_msgs::msg::JointState::ConstSharedPtr m) {
+        onJoints(*m);
+      });
     sun_sub_ = create_subscription<geometry_msgs::msg::Vector3Stamped>(
       "/sun_sensor", 10, [this](geometry_msgs::msg::Vector3Stamped::ConstSharedPtr m) { onSun(*m); });
     vo_sub_ = create_subscription<rover_msgs::msg::VisualOdometry>(

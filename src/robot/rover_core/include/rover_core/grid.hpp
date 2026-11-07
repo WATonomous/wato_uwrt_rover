@@ -74,13 +74,30 @@ struct Grid
   std::vector<T> data;
 
   Grid() = default;
+
   Grid(double res, double ox, double oy, int w, int h, T fill)
-  : resolution(res), origin_x(ox), origin_y(oy), width(w), height(h), data(static_cast<size_t>(w) * h, fill)
+  : resolution(res)
+  , origin_x(ox)
+  , origin_y(oy)
+  , width(w)
+  , height(h)
+  , data(static_cast<size_t>(w) * h, fill)
   {}
 
-  bool contains(int i, int j) const { return i >= 0 && j >= 0 && i < width && j < height; }
-  T & at(int i, int j) { return data[static_cast<size_t>(j) * width + i]; }
-  const T & at(int i, int j) const { return data[static_cast<size_t>(j) * width + i]; }
+  bool contains(int i, int j) const
+  {
+    return i >= 0 && j >= 0 && i < width && j < height;
+  }
+
+  T & at(int i, int j)
+  {
+    return data[static_cast<size_t>(j) * width + i];
+  }
+
+  const T & at(int i, int j) const
+  {
+    return data[static_cast<size_t>(j) * width + i];
+  }
 
   // Cell containing (x, y); returns false if it is outside the grid.
   bool cellOf(double x, double y, int & i, int & j) const
@@ -90,8 +107,15 @@ struct Grid
     return contains(i, j);
   }
 
-  double cellX(int i) const { return origin_x + (i + 0.5) * resolution; }
-  double cellY(int j) const { return origin_y + (j + 0.5) * resolution; }
+  double cellX(int i) const
+  {
+    return origin_x + (i + 0.5) * resolution;
+  }
+
+  double cellY(int j) const
+  {
+    return origin_y + (j + 0.5) * resolution;
+  }
 
   // Value at (x, y), or `outside` when (x, y) is off the grid.
   T valueAt(double x, double y, T outside) const

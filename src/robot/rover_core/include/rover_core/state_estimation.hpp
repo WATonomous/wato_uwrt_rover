@@ -15,9 +15,8 @@
 #pragma once
 
 #include <deque>
+#include <Eigen/Geometry>  // NOLINT(build/include_order): clang-format sorts it with the C++ headers
 #include <optional>
-
-#include <Eigen/Geometry>
 
 namespace rover_core
 {
@@ -38,9 +37,14 @@ public:
     double ki_sun;  // fraction of the implied gyro bias absorbed per measurement
   };
 
-  explicit AttitudeFilter(const Gains & gains) : gains_(gains) {}
+  explicit AttitudeFilter(const Gains & gains)
+  : gains_(gains)
+  {}
 
-  bool initialized() const { return initialized_; }
+  bool initialized() const
+  {
+    return initialized_;
+  }
 
   // TRIAD from one accelerometer sample (at rest) and one sun vector.
   void initialize(const Eigen::Vector3d & accel, const Eigen::Vector3d & sun_body, const Eigen::Vector3d & sun_world);
@@ -50,8 +54,15 @@ public:
   // sun_period: seconds since the previous sun correction (converts error to a rate).
   void correctSun(const Eigen::Vector3d & sun_body, const Eigen::Vector3d & sun_world, double sun_period);
 
-  const Eigen::Quaterniond & orientation() const { return q_; }
-  const Eigen::Vector3d & gyroBias() const { return bias_; }
+  const Eigen::Quaterniond & orientation() const
+  {
+    return q_;
+  }
+
+  const Eigen::Vector3d & gyroBias() const
+  {
+    return bias_;
+  }
 
 private:
   Gains gains_;
@@ -79,8 +90,15 @@ public:
   // t0. Returns nullopt when the history does not cover the interval.
   std::optional<VoUpdate> applyVisualOdometry(double t0, double t1, const Eigen::Vector3d & translation);
 
-  const Eigen::Vector3d & position() const { return position_; }
-  double positionVariance() const { return variance_; }
+  const Eigen::Vector3d & position() const
+  {
+    return position_;
+  }
+
+  double positionVariance() const
+  {
+    return variance_;
+  }
 
 private:
   struct Entry
@@ -105,7 +123,9 @@ class SlipEstimator
 {
 public:
   SlipEstimator(double window_distance, double min_distance, double max_age)
-  : window_distance_(window_distance), min_distance_(min_distance), max_age_(max_age)
+  : window_distance_(window_distance)
+  , min_distance_(min_distance)
+  , max_age_(max_age)
   {}
 
   void add(double stamp, double wheel_distance, double vo_distance);
@@ -122,6 +142,7 @@ private:
     double wheel;
     double vo;
   };
+
   std::deque<Sample> samples_;
   double window_distance_;
   double min_distance_;

@@ -17,6 +17,9 @@
 // images, and what Perseverance's onboard "Mars Global Localization" now does itself). An
 // accepted match replaces map -> odom, which resets the accumulated drift.
 
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_broadcaster.h>
+
 #include <chrono>
 #include <cmath>
 #include <memory>
@@ -29,8 +32,6 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2_ros/transform_broadcaster.h>
 
 #include "rover_core/params.hpp"
 #include "rover_core/terrain_match.hpp"
@@ -44,13 +45,13 @@ class GlobalLocalizationNode : public rclcpp::Node
 {
 public:
   GlobalLocalizationNode()
-  : Node("global_localization"),
-    dem_(rover_core::loadOrbitalMap(rover_core::orbitalMapPath())),
-    map_frame_(declare_parameter<std::string>("map_frame", "map")),
-    odom_frame_(declare_parameter<std::string>("odom_frame", "odom")),
-    trigger_distance_(declare_parameter("trigger_distance", 8.0)),
-    retry_period_(declare_parameter("retry_period", 5.0)),
-    tf_(this)
+  : Node("global_localization")
+  , dem_(rover_core::loadOrbitalMap(rover_core::orbitalMapPath()))
+  , map_frame_(declare_parameter<std::string>("map_frame", "map"))
+  , odom_frame_(declare_parameter<std::string>("odom_frame", "odom"))
+  , trigger_distance_(declare_parameter("trigger_distance", 8.0))
+  , retry_period_(declare_parameter("retry_period", 5.0))
+  , tf_(this)
   {
     cfg_ = {
       declare_parameter("search_xy", 2.0),
@@ -88,7 +89,8 @@ public:
         res->message = "matching on the next height map";
       });
     const double rate = declare_parameter("tf_rate", 20.0);
-    timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<double>(1.0 / rate), [this]() { publishTf(); });
+    timer_ =
+      rclcpp::create_timer(this, get_clock(), std::chrono::duration<double>(1.0 / rate), [this]() { publishTf(); });
   }
 
 private:
@@ -131,9 +133,17 @@ private:
     }
     fix_pub_->publish(fix);
     RCLCPP_INFO(
-      get_logger(), "Orbital match %s: score %.3f runner-up %.3f, %d points, relief %.2f m, shift (%.2f, %.2f) m, %.2f deg, %.0f ms",
-      r.accepted ? "ACCEPTED" : "rejected", r.score, r.runner_up, r.points, r.relief, fix.dx, fix.dy,
-      fix.dyaw * 180.0 / M_PI, ms);
+      get_logger(),
+      "Orbital match %s: score %.3f runner-up %.3f, %d points, relief %.2f m, shift (%.2f, %.2f) m, %.2f deg, %.0f ms",
+      r.accepted ? "ACCEPTED" : "rejected",
+      r.score,
+      r.runner_up,
+      r.points,
+      r.relief,
+      fix.dx,
+      fix.dy,
+      fix.dyaw * 180.0 / M_PI,
+      ms);
   }
 
   void publishTf()

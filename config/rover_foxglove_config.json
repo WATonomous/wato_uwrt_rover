@@ -1,23 +1,15 @@
 {
   "configById": {
-    "RawMessages!4j4g8j9": {
-      "topicPath": "/cmd_vel"
-    },
-    "Publish!b3qov4": {
-      "topicName": "/control_node/enable",
-      "datatype": "std_msgs/msg/Bool",
-      "value": "{\n  \"data\": true\n}"
-    },
-    "3D!185ho2t": {
+    "3D!enav": {
       "cameraState": {
         "perspective": true,
-        "distance": 103.24633077834305,
-        "phi": 31.496600864955877,
-        "thetaOffset": 88.66836565437944,
+        "distance": 18,
+        "phi": 45,
+        "thetaOffset": 45,
         "targetOffset": [
-          5.756438571556522,
-          -1.9662164552686985,
-          -4.583667488546683e-16
+          0,
+          0,
+          0
         ],
         "target": [
           0,
@@ -31,324 +23,127 @@
           1
         ],
         "fovy": 45,
-        "near": 0.5,
-        "far": 5000
+        "near": 0.1,
+        "far": 1000
       },
-      "followMode": "follow-pose",
-      "followTf": "sim_world",
+      "followMode": "follow-position",
+      "followTf": "base_link",
       "scene": {
-        "enableStats": false,
-        "ignoreColladaUpAxis": false,
         "transforms": {
-          "editable": true,
-          "labelSize": 0.075
+          "labelSize": 0.15
         }
       },
       "transforms": {
-        "frame:robot/crw": {
-          "visible": false
-        },
-        "frame:robot/clw": {
-          "visible": false
-        },
-        "frame:robot/chassis/imu_sensor": {
-          "visible": false
-        },
-        "frame:robot/caster": {
+        "frame:map": {
           "visible": true
         },
-        "frame:robot/chassis/camera": {
+        "frame:odom": {
           "visible": true
         },
-        "frame:cyl2": {
-          "visible": false
-        },
-        "frame:cyl1": {
-          "visible": false
-        },
-        "frame:box5": {
-          "visible": false
-        },
-        "frame:box4": {
-          "visible": false
-        },
-        "frame:box3": {
-          "visible": false
-        },
-        "frame:box2": {
-          "visible": false
-        },
-        "frame:box1": {
-          "visible": false
-        },
-        "frame:sim_world": {
+        "frame:base_link": {
           "visible": true
-        },
-        "frame:robot/chassis/sim_realsense_d435_color": {
-          "visible": true
-        },
-        "frame:robot/chassis/sim_realsense_d435_2_color": {
-          "visible": true
-        },
-        "frame:robot/chassis/sim_realsense_d435_1_color": {
-          "visible": true,
-          "rpyCoefficient": [
-            0,
-            0,
-            0
-          ],
-          "xyzOffset": [
-            0,
-            0,
-            0
-          ]
         }
       },
       "topics": {
-        "/lidar": {
+        "/enav/height_cloud": {
           "visible": true,
-          "colorField": "range",
-          "colorMode": "gradient",
+          "colorField": "z",
+          "colorMode": "colormap",
           "colorMap": "turbo",
-          "pointSize": 13.66,
-          "gradient": [
-            "#c41212ff",
-            "#36ff00ff"
-          ],
-          "pointShape": "circle"
+          "pointSize": 4,
+          "pointShape": "square"
         },
-        "/lidar/points": {
-          "visible": true,
-          "colorField": "ring",
-          "colorMode": "gradient",
-          "colorMap": "turbo",
-          "pointSize": 9,
-          "pointShape": "circle",
-          "gradient": [
-            "rgba(100, 47, 105, 1)",
-            "#718ab7ff"
-          ]
-        },
-        "/camera": {
-          "visible": false
-        },
-        "/occupancy": {
-          "visible": false,
-          "colorMode": "costmap"
-        },
-        "/path_marker": {
-          "visible": false,
-          "color": "#ff000073",
-          "showOutlines": true
-        },
-        "/map": {
-          "visible": true,
-          "colorMode": "costmap",
-          "alpha": 0.5016
-        },
-        "/costmap": {
-          "visible": false,
-          "colorMode": "costmap",
-          "alpha": 1
-        },
-        "/path": {
-          "visible": true,
-          "gradient": [
-            "#90ff6bff",
-            "#eeff6b80"
-          ]
-        },
-        "/camera/camera/depth/color/points": {
-          "visible": false
-        },
-        "/sim/realsense/depth/points": {
-          "visible": true,
-          "colorField": "rgb",
-          "colorMode": "rgb",
-          "colorMap": "turbo"
-        },
-        "/sim/realsense/depth/image": {
-          "visible": false,
-          "frameLocked": true,
-          "cameraInfoTopic": "/sim/realsense/depth/camera_info",
-          "distance": 1,
-          "planarProjectionFactor": 0,
-          "color": "#ffffff"
-        },
-        "/camera/depth/points": {
-          "visible": false,
-          "colorField": "rgb",
-          "colorMode": "rgb",
-          "colorMap": "turbo"
-        },
-        "/goal_pose": {
+        "/enav/candidates": {
           "visible": true
         },
-        "/sim/realsense2/depth/image": {
-          "visible": false,
-          "frameLocked": true,
-          "cameraInfoTopic": "/sim/realsense2/depth/camera_info",
-          "distance": 1,
-          "planarProjectionFactor": 0,
-          "color": "#ffffff"
-        },
-        "/sim/realsense1/depth/points": {
+        "/enav/cost": {
           "visible": true,
-          "colorField": "rgb",
-          "colorMode": "rgb",
-          "colorMap": "turbo"
+          "colorMode": "costmap",
+          "alpha": 0.5
         },
-        "/sim/realsense2/depth/points": {
-          "visible": true,
-          "colorField": "rgb",
-          "colorMode": "rgb",
-          "colorMap": "turbo"
-        },
-        "/sim/realsense2/depth/camera_info": {
+        "/enav/cost_to_go": {
           "visible": false
         },
-        "/camera/points": {
-          "visible": false,
-          "colorField": "rgb",
-          "colorMode": "rgb",
-          "colorMap": "turbo"
+        "/enav/goal": {
+          "visible": true,
+          "pointSize": 20,
+          "color": "#ff3b30ff"
+        },
+        "/enav/plan": {
+          "visible": false
+        },
+        "/odom": {
+          "visible": false
         }
       },
       "layers": {
-        "9e830917-d6fe-4f25-8e7b-25afa5a47d21": {
+        "grid": {
           "visible": true,
-          "frameLocked": true,
-          "label": "URDF",
-          "instanceId": "9e830917-d6fe-4f25-8e7b-25afa5a47d21",
-          "layerId": "foxglove.Urdf",
-          "sourceType": "url",
-          "url": "https://raw.githubusercontent.com/WATonomous/wato_rover/add-rover-urdf/src/gazebo/launch/robot.urdf",
-          "filePath": "",
-          "parameter": "",
-          "topic": "",
-          "framePrefix": "",
-          "displayMode": "auto",
-          "fallbackColor": "#ffffff",
-          "order": 1
-        },
-        "6387c3f4-066a-4fb9-a043-d9bbb06d4697": {
-          "visible": false,
-          "frameLocked": true,
-          "label": "Grid",
-          "instanceId": "6387c3f4-066a-4fb9-a043-d9bbb06d4697",
-          "layerId": "foxglove.Grid",
-          "divisions": 30,
-          "color": "#ff7f24ff",
-          "position": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "order": 2,
-          "size": 30,
-          "lineWidth": 1
-        },
-        "cfe20e67-fff3-481a-9a11-76c83d4106e3": {
-          "displayMode": "auto",
-          "fallbackColor": "#ffffff",
-          "showAxis": false,
-          "axisScale": 1,
-          "showOutlines": true,
-          "opacity": 1,
-          "visible": true,
-          "frameLocked": true,
-          "instanceId": "cfe20e67-fff3-481a-9a11-76c83d4106e3",
-          "label": "URDF",
-          "layerId": "foxglove.Urdf",
-          "sourceType": "url",
-          "url": "https://raw.githubusercontent.com/WATonomous/wato_rover/march22_demo/src/gazebo/launch/mars_env.urdf",
-          "filePath": "",
-          "parameter": "",
-          "topic": "",
-          "framePrefix": "",
-          "order": 4
+          "frameId": "map",
+          "size": 60,
+          "divisions": 12,
+          "layerId": "foxglove.Grid"
         }
       },
       "publish": {
         "type": "point",
-        "poseTopic": "/goal_pose",
-        "pointTopic": "/goal_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      },
-      "imageMode": {}
-    },
-    "Teleop!1rfn0xj": {
-      "topic": "/cmd_vel",
-      "publishRate": 1,
-      "upButton": {
-        "field": "linear-x",
-        "value": 1
-      },
-      "downButton": {
-        "field": "linear-x",
-        "value": 0
-      },
-      "leftButton": {
-        "field": "angular-z",
-        "value": 1
-      },
-      "rightButton": {
-        "field": "angular-z",
-        "value": -1
+        "pointTopic": "/goal_point"
       }
     },
-    "Image!2c95gcu": {
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [
-          0,
-          0,
-          0
-        ],
-        "targetOffset": [
-          0,
-          0,
-          0
-        ],
-        "targetOrientation": [
-          0,
-          0,
-          0,
-          1
-        ],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
-      },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {},
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      },
+    "Image!navcam": {
+      "cameraTopic": "/navcam/image",
       "imageMode": {
-        "imageTopic": "/sim/realsense1/depth/image",
-        "calibrationTopic": "/sim/realsense1/depth/camera_info"
+        "imageTopic": "/navcam/image"
       }
+    },
+    "Plot!localization": {
+      "title": "Localization error vs ground truth (m)",
+      "paths": [
+        {
+          "value": "/eval/stats.position_error",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "estimate (odometry + orbital fixes)"
+        },
+        {
+          "value": "/eval/stats.odom_position_error",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "odometry only"
+        }
+      ],
+      "showLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Plot!mobility": {
+      "title": "Slip and planning",
+      "paths": [
+        {
+          "value": "/localization/slip.slip",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "slip"
+        },
+        {
+          "value": "/enav/plan.ace_evaluations",
+          "enabled": false,
+          "timestampMethod": "receiveTime",
+          "label": "ACE paths checked"
+        },
+        {
+          "value": "/enav/plan.planning_time_ms",
+          "enabled": false,
+          "timestampMethod": "receiveTime",
+          "label": "planning ms"
+        }
+      ],
+      "showLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "RawMessages!mobility": {
+      "topicPath": "/mobility/status"
     }
   },
   "globalVariables": {},
@@ -358,21 +153,22 @@
   },
   "layout": {
     "direction": "row",
-    "first": {
-      "first": "Publish!b3qov4",
-      "second": "RawMessages!4j4g8j9",
-      "direction": "column"
-    },
+    "first": "3D!enav",
     "second": {
-      "first": "3D!185ho2t",
+      "direction": "column",
+      "first": "Image!navcam",
       "second": {
-        "first": "Teleop!1rfn0xj",
-        "second": "Image!2c95gcu",
-        "direction": "column"
+        "direction": "column",
+        "first": {
+          "direction": "row",
+          "first": "Plot!localization",
+          "second": "Plot!mobility"
+        },
+        "second": "RawMessages!mobility",
+        "splitPercentage": 70
       },
-      "direction": "row",
-      "splitPercentage": 63.34763948497854
+      "splitPercentage": 40
     },
-    "splitPercentage": 34.30749682337992
+    "splitPercentage": 60
   }
 }

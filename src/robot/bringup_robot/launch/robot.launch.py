@@ -36,12 +36,15 @@ SIM_NODES = [
 
 def nodes(context):
     config = os.path.join(get_package_share_directory("bringup_robot"), "config")
-    scenario = os.path.join(config, "scenarios", LaunchConfiguration("scenario").perform(context) + ".yaml")
+    scenario = os.path.join(
+        config, "scenarios", LaunchConfiguration("scenario").perform(context) + ".yaml"
+    )
     if not os.path.isfile(scenario):
         raise FileNotFoundError(f"unknown scenario: {scenario}")
     params = [os.path.join(config, "params.yaml"), scenario, {"use_sim_time": True}]
     out = [
-        Node(package=pkg, executable=exe, name=name, parameters=params, output="screen") for pkg, exe, name in NODES
+        Node(package=pkg, executable=exe, name=name, parameters=params, output="screen")
+        for pkg, exe, name in NODES
     ]
     out += [
         Node(
@@ -61,9 +64,15 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "scenario", default_value="traverse", description="config/scenarios/<name>.yaml (traverse, rock_field, sand_trap)"
+                "scenario",
+                default_value="traverse",
+                description="config/scenarios/<name>.yaml (traverse, rock_field, sand_trap)",
             ),
-            DeclareLaunchArgument("sim", default_value="true", description="also run sim-only nodes (sun sensor, eval)"),
+            DeclareLaunchArgument(
+                "sim",
+                default_value="true",
+                description="also run sim-only nodes (sun sensor, eval)",
+            ),
             OpaqueFunction(function=nodes),
         ]
     )

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <gtest/gtest.h>
+
 #include <cmath>
 #include <vector>
-
-#include <gtest/gtest.h>
 
 #include "rover_core/planner.hpp"
 
@@ -27,7 +27,11 @@ namespace
 PathTreeConfig treeConfig()
 {
   return {
-    {0.0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.4, -2.4, M_PI}, {0.0, 0.3, -0.3, 0.8, -0.8}, 1.2, 0.1, 15.0 * M_PI / 180.0};
+    {0.0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.4, -2.4, M_PI},
+    {0.0, 0.3, -0.3, 0.8, -0.8},
+    1.2,
+    0.1,
+    15.0 * M_PI / 180.0};
 }
 
 CostConfig costConfig()

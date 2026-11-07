@@ -15,9 +15,8 @@
 #pragma once
 
 #include <array>
+#include <Eigen/Geometry>  // NOLINT(build/include_order): clang-format sorts it with the C++ headers
 #include <string>
-
-#include <Eigen/Geometry>
 
 #include "rover_core/grid.hpp"
 
@@ -76,10 +75,14 @@ struct RoverParams
     double slip;
     double stall_ratio;
     double stall_time;
+    double persist_time;  // tilt / suspension must stay over the limit this long
   } faults;
 
   // Height of base_link (the rocker pivots) above flat ground.
-  double pivotHeight() const { return wheel_radius - front_wheel_z; }
+  double pivotHeight() const
+  {
+    return wheel_radius - front_wheel_z;
+  }
 
   // Wheel x positions in base_link: front, middle, rear.
   std::array<double, 3> wheelX() const

@@ -20,7 +20,8 @@
 #include <string>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
-#include <yaml-cpp/yaml.h>
+
+#include <yaml-cpp/yaml.h>  // NOLINT(build/include_order): clang-format groups it after other headers
 
 namespace rover_core
 {
@@ -40,7 +41,8 @@ Eigen::Isometry3d RoverParams::navcamOptical() const
 Eigen::Vector3d WorldParams::sunDirection() const
 {
   return {
-    std::cos(sun_elevation) * std::cos(sun_azimuth), std::cos(sun_elevation) * std::sin(sun_azimuth),
+    std::cos(sun_elevation) * std::cos(sun_azimuth),
+    std::cos(sun_elevation) * std::sin(sun_azimuth),
     std::sin(sun_elevation)};
 }
 
@@ -83,17 +85,29 @@ RoverParams loadRoverParams(const std::string & path)
 
   const YAML::Node cam = y["navcam"];
   p.navcam = {
-    cam["x"].as<double>(), cam["z"].as<double>(), cam["pitch"].as<double>(), cam["near"].as<double>(),
+    cam["x"].as<double>(),
+    cam["z"].as<double>(),
+    cam["pitch"].as<double>(),
+    cam["near"].as<double>(),
     cam["far"].as<double>()};
   p.drive = {y["drive"]["speed"].as<double>(), y["drive"]["turn_rate"].as<double>()};
 
   const YAML::Node ace = y["ace_limits"];
   p.ace = {
-    ace["tilt"].as<double>(), ace["rocker"].as<double>(), ace["bogie"].as<double>(),
-    ace["belly_clearance"].as<double>(), ace["wheel_margin"].as<double>()};
+    ace["tilt"].as<double>(),
+    ace["rocker"].as<double>(),
+    ace["bogie"].as<double>(),
+    ace["belly_clearance"].as<double>(),
+    ace["wheel_margin"].as<double>()};
   const YAML::Node f = y["fault_limits"];
-  p.faults = {f["tilt"].as<double>(),  f["rocker"].as<double>(),      f["bogie"].as<double>(),
-              f["slip"].as<double>(), f["stall_ratio"].as<double>(), f["stall_time"].as<double>()};
+  p.faults = {
+    f["tilt"].as<double>(),
+    f["rocker"].as<double>(),
+    f["bogie"].as<double>(),
+    f["slip"].as<double>(),
+    f["stall_ratio"].as<double>(),
+    f["stall_time"].as<double>(),
+    f["persist_time"].as<double>()};
   return p;
 }
 
@@ -112,8 +126,12 @@ Grid<float> loadOrbitalMap(const std::string & yaml_path)
 {
   const YAML::Node y = YAML::LoadFile(yaml_path);
   Grid<float> dem(
-    y["resolution"].as<double>(), y["origin_x"].as<double>(), y["origin_y"].as<double>(), y["width"].as<int>(),
-    y["height"].as<int>(), 0.0f);
+    y["resolution"].as<double>(),
+    y["origin_x"].as<double>(),
+    y["origin_y"].as<double>(),
+    y["width"].as<int>(),
+    y["height"].as<int>(),
+    0.0f);
   const std::string dir = yaml_path.substr(0, yaml_path.find_last_of('/') + 1);
   std::ifstream file(dir + y["file"].as<std::string>(), std::ios::binary);
   if (!file) throw std::runtime_error("cannot open orbital DEM next to " + yaml_path);

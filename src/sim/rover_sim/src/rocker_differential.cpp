@@ -21,11 +21,11 @@
 #include <string>
 
 #include <ignition/common/Console.hh>
-#include <ignition/gazebo/Model.hh>
-#include <ignition/gazebo/System.hh>
 #include <ignition/gazebo/components/JointForceCmd.hh>
 #include <ignition/gazebo/components/JointPosition.hh>
 #include <ignition/gazebo/components/JointVelocity.hh>
+#include <ignition/gazebo/Model.hh>
+#include <ignition/gazebo/System.hh>
 #include <ignition/plugin/Register.hh>
 
 namespace rover_sim
@@ -37,7 +37,9 @@ class RockerDifferential : public gz::System, public gz::ISystemConfigure, publi
 {
 public:
   void Configure(
-    const gz::Entity & entity, const std::shared_ptr<const sdf::Element> & sdf, gz::EntityComponentManager & ecm,
+    const gz::Entity & entity,
+    const std::shared_ptr<const sdf::Element> & sdf,
+    gz::EntityComponentManager & ecm,
     gz::EventManager &) override
   {
     gz::Model model(entity);
@@ -81,5 +83,7 @@ private:
 }  // namespace rover_sim
 
 IGNITION_ADD_PLUGIN(
-  rover_sim::RockerDifferential, ignition::gazebo::System, ignition::gazebo::ISystemConfigure,
+  rover_sim::RockerDifferential,
+  ignition::gazebo::System,
+  ignition::gazebo::ISystemConfigure,
   ignition::gazebo::ISystemPreUpdate)

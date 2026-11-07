@@ -36,7 +36,9 @@ PathPose arcPose(const PathPose & start, double k, double ds)
   }
   const double yaw = start.yaw + k * ds;
   return {
-    start.x + (std::sin(yaw) - std::sin(start.yaw)) / k, start.y - (std::cos(yaw) - std::cos(start.yaw)) / k, yaw,
+    start.x + (std::sin(yaw) - std::sin(start.yaw)) / k,
+    start.y - (std::cos(yaw) - std::cos(start.yaw)) / k,
+    yaw,
     start.s + ds};
 }
 
@@ -79,8 +81,7 @@ Grid<float> orbitalCost(const Grid<float> & dem, const CostConfig & cfg)
       const double gy = (dem.at(i, j + 1) - dem.at(i, j - 1)) / (2.0 * dem.resolution);
       const double slope = std::atan(std::hypot(gx, gy));
       if (!std::isfinite(slope) || slope > cfg.slope_lethal) continue;
-      cost.at(i, j) =
-        static_cast<float>(std::max(0.0, (slope - cfg.slope_free) / (cfg.slope_lethal - cfg.slope_free)));
+      cost.at(i, j) = static_cast<float>(std::max(0.0, (slope - cfg.slope_free) / (cfg.slope_lethal - cfg.slope_free)));
     }
   }
   return cost;
@@ -110,16 +111,19 @@ void stampObservedCost(
         }
       }
       const double step = hi - lo;
-      const float value = step > cfg.step_lethal
-                            ? kLethal
-                            : static_cast<float>(
-                                std::max(0.0, (step - cfg.step_free) / (cfg.step_lethal - cfg.step_free)));
+      const float value =
+        step > cfg.step_lethal
+          ? kLethal
+          : static_cast<float>(std::max(0.0, (step - cfg.step_free) / (cfg.step_lethal - cfg.step_free)));
 
       double mx;
       double my;
       transformPoint(
-        map_from_odom, elevation.origin_x + (bi + block / 2.0) * elevation.resolution,
-        elevation.origin_y + (bj + block / 2.0) * elevation.resolution, mx, my);
+        map_from_odom,
+        elevation.origin_x + (bi + block / 2.0) * elevation.resolution,
+        elevation.origin_y + (bj + block / 2.0) * elevation.resolution,
+        mx,
+        my);
       int i;
       int j;
       if (observed.cellOf(mx, my, i, j)) observed.at(i, j) = value;
@@ -209,8 +213,12 @@ std::vector<PathPose> toOdom(const CandidatePath & path, const Pose2 & rover)
 }
 
 PlanResult plan(
-  const RoverParams & p, const std::vector<CandidatePath> & tree, const PlanInputs & in, const RankWeights & w,
-  double cost_weight, int max_ace_paths)
+  const RoverParams & p,
+  const std::vector<CandidatePath> & tree,
+  const PlanInputs & in,
+  const RankWeights & w,
+  double cost_weight,
+  int max_ace_paths)
 {
   PlanResult result;
   for (size_t idx = 0; idx < tree.size(); ++idx) {
@@ -233,7 +241,8 @@ PlanResult plan(
       if (k > static_cast<size_t>(path.turn_poses)) {
         total += (poses[k].s - poses[k - 1].s) * (1.0 + cost_weight * c);
       }
-      if (static_cast<int>(k) >= path.commit_end && std::isnan(in.elevation->valueAt(poses[k].x, poses[k].y, kUnknown))) {
+      if (static_cast<int>(k) >= path.commit_end && std::isnan(in.elevation->valueAt(poses[k].x, poses[k].y, kUnknown)))
+      {
         total += w.unknown;
       }
     }
@@ -250,8 +259,9 @@ PlanResult plan(
     }
     result.ranked.push_back({static_cast<int>(idx), total});
   }
-  std::sort(
-    result.ranked.begin(), result.ranked.end(), [](const RankedPath & a, const RankedPath & b) { return a.cost < b.cost; });
+  std::sort(result.ranked.begin(), result.ranked.end(), [](const RankedPath & a, const RankedPath & b) {
+    return a.cost < b.cost;
+  });
   result.candidates = static_cast<int>(result.ranked.size());
 
   const AceMaps maps = buildAceMaps(p, *in.elevation);

@@ -6,7 +6,8 @@ FROM ${BASE_IMAGE} AS source
 WORKDIR ${AMENT_WS}/src
 
 # Copy in source code
-COPY src/wato_msgs wato_msgs
+# Custom messages, so the bridge can serialize them for Foxglove
+COPY src/common/rover_msgs rover_msgs
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -40,7 +41,9 @@ RUN apt-get update && \
 
 # Install Rosdep requirements
 COPY --from=source /tmp/colcon_install_list /tmp/colcon_install_list
-RUN apt-fast install -qq -y --no-install-recommends "$(cat /tmp/colcon_install_list)"
+RUN apt-get update && \
+    xargs -r apt-fast install -qq -y --no-install-recommends < /tmp/colcon_install_list && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy in source code from source stage
 WORKDIR ${AMENT_WS}

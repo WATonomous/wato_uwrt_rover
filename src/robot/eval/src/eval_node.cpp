@@ -17,6 +17,9 @@
 //   odom_position_error  odometry alone, anchored to the true start pose
 //   drift_percent        odometry error per distance driven
 
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #include <chrono>
 #include <cmath>
 #include <memory>
@@ -25,8 +28,6 @@
 
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
 
 #include "rover_core/grid.hpp"
 #include "rover_msgs/msg/eval_stats.hpp"
@@ -47,7 +48,10 @@ Pose2 toPose2(const geometry_msgs::msg::Pose & p)
 class EvalNode : public rclcpp::Node
 {
 public:
-  EvalNode() : Node("eval"), tf_buffer_(get_clock()), tf_listener_(tf_buffer_)
+  EvalNode()
+  : Node("eval")
+  , tf_buffer_(get_clock())
+  , tf_listener_(tf_buffer_)
   {
     pub_ = create_publisher<rover_msgs::msg::EvalStats>("/eval/stats", 10);
     truth_sub_ = create_subscription<nav_msgs::msg::Odometry>(
@@ -74,7 +78,8 @@ private:
     const auto tf = tf_buffer_.lookupTransform("map", "odom", tf2::TimePointZero);
     const auto & q = tf.transform.rotation;
     const Pose2 map_from_odom{
-      tf.transform.translation.x, tf.transform.translation.y,
+      tf.transform.translation.x,
+      tf.transform.translation.y,
       std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))};
     const Pose2 estimate = rover_core::compose(map_from_odom, *odom_);
     const Pose2 odom_only = rover_core::compose(*true_map_from_odom_, *odom_);
@@ -89,8 +94,12 @@ private:
     pub_->publish(stats);
     if (++reports_ % 30 == 0) {
       RCLCPP_INFO(
-        get_logger(), "driven %.1f m | estimate error %.2f m, %.1f deg | odometry-only error %.2f m (%.1f%% of distance)",
-        distance_, stats.position_error, stats.heading_error * 180.0 / M_PI, stats.odom_position_error,
+        get_logger(),
+        "driven %.1f m | estimate error %.2f m, %.1f deg | odometry-only error %.2f m (%.1f%% of distance)",
+        distance_,
+        stats.position_error,
+        stats.heading_error * 180.0 / M_PI,
+        stats.odom_position_error,
         stats.drift_percent);
     }
   }

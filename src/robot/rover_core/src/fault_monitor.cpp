@@ -14,6 +14,7 @@
 
 #include "rover_core/fault_monitor.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -55,24 +56,30 @@ const char * toString(Fault f)
   throw std::invalid_argument("unknown Fault");
 }
 
-Fault FaultMonitor::update(const FaultInputs & in, bool check_slip, std::string & detail)
+Fault FaultMonitor::update(const FaultInputs & in, const Checks & checks, std::string & detail)
 {
+  // Tilt and suspension must stay over their limit for persist_time: a wheel bumping a rock
+  // edge spikes the bogie for an instant, which is not a hazard.
   const double tilt = std::acos(std::cos(in.roll) * std::cos(in.pitch));
-  if (tilt > limits_.tilt) {
+  tilt_time_ = tilt > limits_.tilt ? tilt_time_ + in.dt : 0.0;
+  if (tilt_time_ > limits_.persist_time) {
     detail = format("tilt %.1f deg > %.1f deg", tilt * 180.0 / M_PI, limits_.tilt * 180.0 / M_PI);
     return Fault::kTilt;
   }
+  double rocker = 0.0;
+  double bogie = 0.0;
   for (int side = 0; side < 2; ++side) {
-    if (std::abs(in.rocker[side]) > limits_.rocker) {
-      detail = format("rocker %.2f rad > %.2f rad", std::abs(in.rocker[side]), limits_.rocker);
-      return Fault::kSuspension;
-    }
-    if (std::abs(in.bogie[side]) > limits_.bogie) {
-      detail = format("bogie %.2f rad > %.2f rad", std::abs(in.bogie[side]), limits_.bogie);
-      return Fault::kSuspension;
-    }
+    rocker = std::max(rocker, std::abs(in.rocker[side]));
+    bogie = std::max(bogie, std::abs(in.bogie[side]));
   }
-  if (check_slip && in.slip && *in.slip > limits_.slip) {
+  const bool over = rocker > limits_.rocker || bogie > limits_.bogie;
+  suspension_time_ = checks.suspension && over ? suspension_time_ + in.dt : 0.0;
+  if (suspension_time_ > limits_.persist_time) {
+    detail = format("rocker %.2f rad, bogie %.2f rad", rocker, bogie) +
+             format(" (limits %.2f, %.2f)", limits_.rocker, limits_.bogie);
+    return Fault::kSuspension;
+  }
+  if (checks.slip && in.slip && *in.slip > limits_.slip) {
     detail = format("slip %.0f%% > %.0f%%", *in.slip * 100.0, limits_.slip * 100.0);
     return Fault::kSlip;
   }

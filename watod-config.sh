@@ -50,6 +50,11 @@ export ACTIVE_MODULES="robot gazebo vis_tools"
 # Docker Registry to pull/push images. DEFAULT = "ghcr.io/watonomous/wato_monorepo"
 # REGISTRY_URL=""
 
-## Platform in which to build the docker images with.
-## Either arm64 (apple silicon, raspberry pi) or amd64 (most computers)
-export PLATFORM="arm64"
+## Base image every module builds on.
+##   - local : public ros:humble image built on this machine; no GHCR login needed (works on any Mac/PC)
+##   - arm64 : WATonomous GHCR image for apple silicon / raspberry pi (needs GHCR access)
+##   - amd64 : WATonomous GHCR image for most computers (needs GHCR access)
+export PLATFORM="local"
+
+## Navigation scenario for the robot module: traverse, rock_field or sand_trap
+# export SCENARIO="traverse"

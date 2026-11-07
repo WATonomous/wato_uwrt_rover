@@ -131,8 +131,12 @@ struct PlanResult
 // Rank every candidate with cheap heuristics (route cost + cost-to-go at the endpoint), then
 // run ACE on them best-first and return the first that passes.
 PlanResult plan(
-  const RoverParams & p, const std::vector<CandidatePath> & tree, const PlanInputs & in, const RankWeights & w,
-  double cost_weight, int max_ace_paths);
+  const RoverParams & p,
+  const std::vector<CandidatePath> & tree,
+  const PlanInputs & in,
+  const RankWeights & w,
+  double cost_weight,
+  int max_ace_paths);
 
 // A candidate's poses transformed into the odom frame.
 std::vector<PathPose> toOdom(const CandidatePath & path, const Pose2 & rover);

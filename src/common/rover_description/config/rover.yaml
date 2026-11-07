@@ -79,3 +79,4 @@ fault_limits:
   slip: 0.6  # fraction, 1 - d_vo / d_wheel over the slip window
   stall_ratio: 0.2  # measured / commanded wheel speed below this counts as stalled
   stall_time: 2.0  # s
+  persist_time: 0.5  # s tilt / suspension must stay over the limit (ignores bumps off rock edges)

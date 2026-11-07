@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <Eigen/Geometry>
 #include <optional>
 #include <vector>
 
-#include <Eigen/Geometry>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 
@@ -35,16 +35,18 @@ struct MotionEstimate
 // previous-camera points into the current camera; inverting it and changing frames from the
 // camera to base_link gives the body motion.
 inline std::optional<MotionEstimate> estimateMotion(
-  const std::vector<cv::Point3f> & previous_points, const std::vector<cv::Point2f> & current_pixels,
-  const cv::Matx33d & k, const Eigen::Isometry3d & base_from_optical, int min_inliers)
+  const std::vector<cv::Point3f> & previous_points,
+  const std::vector<cv::Point2f> & current_pixels,
+  const cv::Matx33d & k,
+  const Eigen::Isometry3d & base_from_optical,
+  int min_inliers)
 {
   if (static_cast<int>(previous_points.size()) < min_inliers) return std::nullopt;
   cv::Mat rvec;
   cv::Mat tvec;
   std::vector<int> inliers;
   const bool ok = cv::solvePnPRansac(
-    previous_points, current_pixels, k, cv::noArray(), rvec, tvec, false, 200, 2.0f, 0.999, inliers,
-    cv::SOLVEPNP_EPNP);
+    previous_points, current_pixels, k, cv::noArray(), rvec, tvec, false, 200, 2.0f, 0.999, inliers, cv::SOLVEPNP_EPNP);
   if (!ok || static_cast<int>(inliers.size()) < min_inliers) return std::nullopt;
 
   std::vector<cv::Point3f> in_points;

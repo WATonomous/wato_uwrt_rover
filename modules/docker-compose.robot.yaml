@@ -11,7 +11,8 @@ services:
     image: "${ROBOT_IMAGE:?}:${TAG}"
     profiles:
       - deploy
-    command: /bin/bash -c "ros2 launch bringup_robot robot.launch.py"
+    # SCENARIO: traverse (default), rock_field or sand_trap (src/robot/bringup_robot/config/scenarios)
+    command: /bin/bash -c "ros2 launch bringup_robot robot.launch.py scenario:=${SCENARIO:-traverse}"
 
   robot_dev:
     build: *robot_build
@@ -19,5 +20,7 @@ services:
     command: tail -F anything
     profiles:
       - develop
+    # Paths match AMENT_WS=/ament_ws in docker/base/local_base.Dockerfile.
     volumes:
-      - ${MONO_DIR}/src/robot:/root/ament_ws/src
+      - ${MONO_DIR}/src/robot:/ament_ws/src/robot
+      - ${MONO_DIR}/src/common:/ament_ws/src/common

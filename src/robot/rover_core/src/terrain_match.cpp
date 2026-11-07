@@ -80,8 +80,13 @@ Detrended detrend(const std::vector<TerrainPoint> & pts)
 // Normalized cross-correlation between detrended local heights and detrended DEM samples
 // under one candidate. Candidates that put any point off the DEM score -1.
 double score(
-  const std::vector<TerrainPoint> & pts, const Detrended & local, const Grid<float> & dem, const Pose2 & guess,
-  double cx, double cy, const Candidate & c)
+  const std::vector<TerrainPoint> & pts,
+  const Detrended & local,
+  const Grid<float> & dem,
+  const Pose2 & guess,
+  double cx,
+  double cy,
+  const Candidate & c)
 {
   const double cos_c = std::cos(c.dyaw);
   const double sin_c = std::sin(c.dyaw);
@@ -107,8 +112,17 @@ double score(
 }
 
 std::vector<Candidate> search(
-  const std::vector<TerrainPoint> & pts, const Detrended & local, const Grid<float> & dem, const Pose2 & guess,
-  double cx, double cy, const Candidate & center, double xy_range, double xy_step, double yaw_range, double yaw_step)
+  const std::vector<TerrainPoint> & pts,
+  const Detrended & local,
+  const Grid<float> & dem,
+  const Pose2 & guess,
+  double cx,
+  double cy,
+  const Candidate & center,
+  double xy_range,
+  double xy_step,
+  double yaw_range,
+  double yaw_step)
 {
   std::vector<Candidate> out;
   const int nxy = static_cast<int>(std::lround(xy_range / xy_step));
@@ -152,7 +166,8 @@ std::vector<TerrainPoint> terrainPoints(const Grid<float> & elevation, double re
       if (2 * known < block * block) continue;
       pts.push_back(
         {elevation.origin_x + (bi + block / 2.0) * elevation.resolution,
-         elevation.origin_y + (bj + block / 2.0) * elevation.resolution, sum / known});
+         elevation.origin_y + (bj + block / 2.0) * elevation.resolution,
+         sum / known});
     }
   }
   return pts;
@@ -182,7 +197,16 @@ MatchResult matchTerrain(
   cy /= points.size();
 
   const std::vector<Candidate> coarse = search(
-    points, local, dem, guess, cx, cy, {0, 0, 0, 0}, cfg.search_xy, cfg.coarse_xy_step, cfg.search_yaw,
+    points,
+    local,
+    dem,
+    guess,
+    cx,
+    cy,
+    {0, 0, 0, 0},
+    cfg.search_xy,
+    cfg.coarse_xy_step,
+    cfg.search_yaw,
     cfg.coarse_yaw_step);
   const Candidate peak = best(coarse);
   result.runner_up = -1.0;
@@ -192,7 +216,16 @@ MatchResult matchTerrain(
     }
   }
   const Candidate refined = best(search(
-    points, local, dem, guess, cx, cy, peak, cfg.coarse_xy_step, cfg.fine_xy_step, cfg.coarse_yaw_step,
+    points,
+    local,
+    dem,
+    guess,
+    cx,
+    cy,
+    peak,
+    cfg.coarse_xy_step,
+    cfg.fine_xy_step,
+    cfg.coarse_yaw_step,
     cfg.fine_yaw_step));
   result.score = refined.score;
   result.accepted =
@@ -204,7 +237,8 @@ MatchResult matchTerrain(
   const double tx = guess.x - cx;
   const double ty = guess.y - cy;
   result.map_from_odom = {
-    cx + cos_c * tx - sin_c * ty + refined.dx, cy + sin_c * tx + cos_c * ty + refined.dy,
+    cx + cos_c * tx - sin_c * ty + refined.dx,
+    cy + sin_c * tx + cos_c * ty + refined.dy,
     wrapAngle(guess.yaw + refined.dyaw)};
   return result;
 }

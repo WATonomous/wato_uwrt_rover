@@ -17,11 +17,11 @@
 // from the simulator's true attitude, with angular noise. Simulation only.
 
 #include <chrono>
+#include <Eigen/Geometry>  // NOLINT(build/include_order): clang-format sorts it with the C++ headers
 #include <memory>
 #include <optional>
 #include <random>
 
-#include <Eigen/Geometry>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -32,17 +32,17 @@ class SunSensorNode : public rclcpp::Node
 {
 public:
   SunSensorNode()
-  : Node("sun_sensor"),
-    sun_world_(rover_core::loadWorldParams(rover_core::worldConfigPath()).sunDirection()),
-    noise_(0.0, declare_parameter("noise", 0.005)),
-    rng_(declare_parameter("seed", 42))
+  : Node("sun_sensor")
+  , sun_world_(rover_core::loadWorldParams(rover_core::worldConfigPath()).sunDirection())
+  , noise_(0.0, declare_parameter("noise", 0.005))
+  , rng_(declare_parameter("seed", 42))
   {
     pub_ = create_publisher<geometry_msgs::msg::Vector3Stamped>("/sun_sensor", 10);
     truth_sub_ = create_subscription<nav_msgs::msg::Odometry>(
       "/sim/ground_truth", 10, [this](nav_msgs::msg::Odometry::ConstSharedPtr m) { truth_ = *m; });
     const double rate = declare_parameter("rate", 1.0);
-    timer_ = rclcpp::create_timer(
-      this, get_clock(), std::chrono::duration<double>(1.0 / rate), [this]() { publish(); });
+    timer_ =
+      rclcpp::create_timer(this, get_clock(), std::chrono::duration<double>(1.0 / rate), [this]() { publish(); });
   }
 
 private:

@@ -71,12 +71,21 @@ def build_heightfield(cfg, rng, xs):
     spawn = cfg["spawn"]
     placed = 0
     while placed < craters["count"]:
-        diameter = math.exp(rng.uniform(math.log(craters["min_diameter"]), math.log(craters["max_diameter"])))
+        diameter = math.exp(
+            rng.uniform(
+                math.log(craters["min_diameter"]), math.log(craters["max_diameter"])
+            )
+        )
         radius = diameter / 2.0
         cx, cy = rng.uniform(-half + radius, half - radius, 2)
-        if math.hypot(cx - spawn["x"], cy - spawn["y"]) < radius * 2.0 + spawn["clear_radius"]:
+        if (
+            math.hypot(cx - spawn["x"], cy - spawn["y"])
+            < radius * 2.0 + spawn["clear_radius"]
+        ):
             continue
-        depth = diameter * rng.uniform(craters["min_depth_ratio"], craters["max_depth_ratio"])
+        depth = diameter * rng.uniform(
+            craters["min_depth_ratio"], craters["max_depth_ratio"]
+        )
         rim = diameter * craters["rim_ratio"]
         r = np.hypot(gx - cx, gy - cy) / radius
         height += crater_profile(r, depth, rim)
@@ -89,8 +98,12 @@ def build_heightfield(cfg, rng, xs):
         across = -(gx - dune["x"]) * math.sin(yaw) + (gy - dune["y"]) * math.cos(yaw)
         half_length = dune["length"] / 2.0
         taper = np.exp(-((along / half_length) ** 4))
-        height += dune["height"] * np.exp(-(across**2) / (2.0 * dune["sigma"] ** 2)) * taper
-        sand |= (np.abs(across) < 2.5 * dune["sigma"]) & (np.abs(along) < half_length * 1.1)
+        height += (
+            dune["height"] * np.exp(-(across**2) / (2.0 * dune["sigma"] ** 2)) * taper
+        )
+        sand |= (np.abs(across) < 2.5 * dune["sigma"]) & (
+            np.abs(along) < half_length * 1.1
+        )
 
     # Flatten a landing pad so the rover spawns on safe, level ground.
     d = np.hypot(gx - spawn["x"], gy - spawn["y"])
@@ -150,7 +163,9 @@ def place_rocks(cfg, rng, sand, xs):
     spawn = cfg["spawn"]
 
     def in_field(x, y):
-        return any(math.hypot(x - f["x"], y - f["y"]) < f["radius"] for f in rcfg["fields"])
+        return any(
+            math.hypot(x - f["x"], y - f["y"]) < f["radius"] for f in rcfg["fields"]
+        )
 
     rocks = [
         r
@@ -169,7 +184,9 @@ def place_rocks(cfg, rng, sand, xs):
         def in_disk(field=field):
             radius = field["radius"] * math.sqrt(rng.uniform())
             angle = rng.uniform(0.0, 2.0 * math.pi)
-            return field["x"] + radius * math.cos(angle), field["y"] + radius * math.sin(angle)
+            return field["x"] + radius * math.cos(angle), field[
+                "y"
+            ] + radius * math.sin(angle)
 
         rocks += sample_rocks(
             rng,
@@ -182,7 +199,10 @@ def place_rocks(cfg, rng, sand, xs):
     rocks += [(b["x"], b["y"], b["diameter"]) for b in rcfg["boulders"]]
 
     def keep(x, y, diameter):
-        if math.hypot(x - spawn["x"], y - spawn["y"]) < spawn["clear_radius"] + diameter:
+        if (
+            math.hypot(x - spawn["x"], y - spawn["y"])
+            < spawn["clear_radius"] + diameter
+        ):
             return False
         i = int(round((x - x0) / res))
         j = int(round((y - x0) / res))
@@ -303,7 +323,9 @@ def write_obj(path, material, verts, uvs, normals, faces):
 
 def write_mtl(path, material, texture):
     with open(path, "w") as f:
-        f.write(f"newmtl {material}\nKa 0.6 0.6 0.6\nKd 1.0 1.0 1.0\nKs 0.03 0.03 0.03\nNs 10\nmap_Kd {texture}\n")
+        f.write(
+            f"newmtl {material}\nKa 0.6 0.6 0.6\nKd 1.0 1.0 1.0\nKs 0.03 0.03 0.03\nNs 10\nmap_Kd {texture}\n"
+        )
 
 
 def terrain_faces(n):
@@ -313,7 +335,9 @@ def terrain_faces(n):
     v10 = v00 + 1
     v01 = v00 + n
     v11 = v01 + 1
-    faces = np.stack([np.stack([v00, v10, v11], 1), np.stack([v00, v11, v01], 1)], 1).reshape(-1, 3)
+    faces = np.stack(
+        [np.stack([v00, v10, v11], 1), np.stack([v00, v11, v01], 1)], 1
+    ).reshape(-1, 3)
     tiles_per_row = (n - 2) // TILE_QUADS + 1
     tile = ((j // TILE_QUADS) * tiles_per_row + i // TILE_QUADS).ravel()
     return faces, np.repeat(tile, 2)
@@ -348,10 +372,17 @@ def make_texture(rng, n, base_rgb, contrast, slope, pebbles, ripple=0.0):
     tone = contrast * periodic_noise(rng, n, slope)
     if ripple > 0.0:
         x = np.arange(n) / n
-        tone += ripple * np.sin(2.0 * math.pi * 24.0 * (x[None, :] + 0.05 * np.sin(2.0 * math.pi * 3.0 * x[:, None])))
+        tone += ripple * np.sin(
+            2.0
+            * math.pi
+            * 24.0
+            * (x[None, :] + 0.05 * np.sin(2.0 * math.pi * 3.0 * x[:, None]))
+        )
     if pebbles:
         stamp_pebbles(rng, tone, pebbles, 1, max(2, n // 400), 0.35)
-    rgb = np.clip(np.array(base_rgb)[None, None, :] * (1.0 + tone[:, :, None]), 0.0, 1.0)
+    rgb = np.clip(
+        np.array(base_rgb)[None, None, :] * (1.0 + tone[:, :, None]), 0.0, 1.0
+    )
     return Image.fromarray((rgb * 255).astype(np.uint8))
 
 
@@ -359,7 +390,11 @@ def make_texture(rng, n, base_rgb, contrast, slope, pebbles, ripple=0.0):
 
 
 def inertia_box(mass, sx, sy, sz):
-    return (mass * (sy * sy + sz * sz) / 12.0, mass * (sx * sx + sz * sz) / 12.0, mass * (sx * sx + sy * sy) / 12.0)
+    return (
+        mass * (sy * sy + sz * sz) / 12.0,
+        mass * (sx * sx + sz * sz) / 12.0,
+        mass * (sx * sx + sy * sy) / 12.0,
+    )
 
 
 def inertial_xml(mass, ixx, iyy, izz):
@@ -393,7 +428,9 @@ def rover_sdf(rover):
     bogie_x = pivot_x + rocker["bogie_pivot"][0]
     bogie_z = rocker["bogie_pivot"][1]
     wheel_z = bogie_z - bogie["drop"]
-    assert abs(wheel_z - rocker["front_wheel"][1]) < 1e-9, "front wheel and bogie wheels must share a height"
+    assert abs(wheel_z - rocker["front_wheel"][1]) < 1e-9, (
+        "front wheel and bogie wheels must share a height"
+    )
     wheels = {
         "front": (pivot_x + rocker["front_wheel"][0], "rocker"),
         "middle": (bogie_x + bogie["half_length"], "bogie"),
@@ -417,7 +454,9 @@ def rover_sdf(rover):
             f"<bias_mean>{bias}</bias_mean><bias_stddev>{bias / 2.0}</bias_stddev></noise>"
         )
 
-    gyro = "".join(f"<{a}>{noise(imu['gyro_noise'], imu['gyro_bias'])}</{a}>" for a in "xyz")
+    gyro = "".join(
+        f"<{a}>{noise(imu['gyro_noise'], imu['gyro_bias'])}</{a}>" for a in "xyz"
+    )
     accel = "".join(f"<{a}>{noise(imu['accel_noise'])}</{a}>" for a in "xyz")
     links = [
         f"""
@@ -555,7 +594,11 @@ def rover_sdf(rover):
 
 def terrain_sdf(surfaces, friction):
     """One collision + visual per mesh file; friction by surface kind (soil, sand, rock)."""
-    mu_of = {"terrain": friction["soil"], "sand": friction["sand"], "rock": friction["rock"]}
+    mu_of = {
+        "terrain": friction["soil"],
+        "sand": friction["sand"],
+        "rock": friction["rock"],
+    }
     parts = []
     for name, kind in surfaces:
         mu = mu_of[kind]
@@ -568,7 +611,9 @@ def terrain_sdf(surfaces, friction):
         )
     return (
         "<?xml version='1.0'?>\n<sdf version='1.8'>\n  <model name='mars_terrain'>\n    <static>true</static>\n"
-        "    <link name='ground'>" + "".join(parts) + "\n    </link>\n  </model>\n</sdf>\n"
+        "    <link name='ground'>"
+        + "".join(parts)
+        + "\n    </link>\n  </model>\n</sdf>\n"
     )
 
 
@@ -634,7 +679,9 @@ def gaussian_blur(field, sigma_px):
     kernel = np.exp(-(np.arange(-radius, radius + 1) ** 2) / (2 * sigma_px**2))
     kernel /= kernel.sum()
     padded = np.pad(field, radius, mode="edge")
-    rows = np.apply_along_axis(lambda r: np.convolve(r, kernel, mode="valid"), 1, padded)
+    rows = np.apply_along_axis(
+        lambda r: np.convolve(r, kernel, mode="valid"), 1, padded
+    )
     return np.apply_along_axis(lambda c: np.convolve(c, kernel, mode="valid"), 0, rows)
 
 
@@ -661,7 +708,9 @@ def orbital_dem(cfg, rng, height, xs, shapes):
         inside = 1.0 - (lx / a) ** 2 - (ly / b) ** 2
         top = zc + c * np.sqrt(np.clip(inside, 0.0, None))
         dem = np.where(inside > 0.0, np.maximum(dem, top), dem)
-    dem = gaussian_blur(dem, orb["blur_sigma"] / res) + orb["noise_std"] * rng.standard_normal(dem.shape)
+    dem = gaussian_blur(dem, orb["blur_sigma"] / res) + orb[
+        "noise_std"
+    ] * rng.standard_normal(dem.shape)
     return dem.astype(np.float32), float(xs[0])
 
 
@@ -684,7 +733,9 @@ def main():
     xs = -cfg["size"] / 2.0 + np.arange(n) * cfg["resolution"]
     height, sand, pad_height = build_heightfield(cfg, rng, xs)
     rocks = place_rocks(cfg, rng, sand, xs)
-    rock_verts, rock_faces, shapes = build_rock_mesh(rng, rocks, height, xs[0], cfg["resolution"])
+    rock_verts, rock_faces, shapes = build_rock_mesh(
+        rng, rocks, height, xs[0], cfg["resolution"]
+    )
 
     terrain_dir = os.path.join(args.out, "models", "mars_terrain")
     mesh_dir = os.path.join(terrain_dir, "meshes")
@@ -705,7 +756,14 @@ def main():
         for t in np.unique(face_tile[mask]):
             name = f"{kind}_{t:02d}"
             tile_faces = faces[mask & (face_tile == t)]
-            write_obj(os.path.join(mesh_dir, f"{name}.obj"), kind, verts, verts[:, :2] / texture_tile, normals, tile_faces)
+            write_obj(
+                os.path.join(mesh_dir, f"{name}.obj"),
+                kind,
+                verts,
+                verts[:, :2] / texture_tile,
+                normals,
+                tile_faces,
+            )
             surfaces.append((name, kind))
     rock_uv = np.stack([rock_verts[:, 0] + rock_verts[:, 1], rock_verts[:, 2]], 1) / 0.6
     write_obj(
@@ -717,15 +775,17 @@ def main():
         rock_faces,
     )
     write_mtl(os.path.join(mesh_dir, "rocks.mtl"), "rocks", "rocks.jpg")
-    assert len(rock_verts) < 65536, "rocks.obj needs splitting: the renderer uses 16-bit vertex indices"
+    assert len(rock_verts) < 65536, (
+        "rocks.obj needs splitting: the renderer uses 16-bit vertex indices"
+    )
     surfaces.append(("rocks", "rock"))
 
     make_texture(rng, tex["soil_px"], (0.62, 0.40, 0.26), 0.30, 1.4, 6000).save(
         os.path.join(mesh_dir, "terrain.jpg"), quality=90
     )
-    make_texture(rng, tex["sand_px"], (0.76, 0.57, 0.40), 0.06, 1.8, 0, ripple=0.04).save(
-        os.path.join(mesh_dir, "sand.jpg"), quality=90
-    )
+    make_texture(
+        rng, tex["sand_px"], (0.76, 0.57, 0.40), 0.06, 1.8, 0, ripple=0.04
+    ).save(os.path.join(mesh_dir, "sand.jpg"), quality=90)
     make_texture(rng, tex["rock_px"], (0.42, 0.34, 0.29), 0.28, 1.2, 400).save(
         os.path.join(mesh_dir, "rocks.jpg"), quality=90
     )

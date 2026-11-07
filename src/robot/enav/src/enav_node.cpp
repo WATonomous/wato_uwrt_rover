@@ -21,6 +21,11 @@
 //   4. ACE checks candidates best-first; the first safe one is published. Mobility drives its
 //      first arc while ENav is already planning the next cycle ("thinking while driving").
 
+#include <cv_bridge/cv_bridge.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -29,7 +34,6 @@
 #include <string>
 #include <vector>
 
-#include <cv_bridge/cv_bridge.h>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -37,10 +41,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
-#include <tf2/LinearMath/Quaternion.h>
 #include <tf2_eigen/tf2_eigen.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include "rover_core/height_map.hpp"
@@ -98,12 +99,12 @@ class EnavNode : public rclcpp::Node
 {
 public:
   EnavNode()
-  : Node("enav"),
-    rover_(rover_core::loadRoverParams(rover_core::roverConfigPath())),
-    base_from_optical_(rover_.navcamOptical()),
-    height_map_(declare_parameter("map_resolution", 0.05), declare_parameter("map_cells", 320)),
-    tf_buffer_(get_clock()),
-    tf_listener_(tf_buffer_)
+  : Node("enav")
+  , rover_(rover_core::loadRoverParams(rover_core::roverConfigPath()))
+  , base_from_optical_(rover_.navcamOptical())
+  , height_map_(declare_parameter("map_resolution", 0.05), declare_parameter("map_cells", 320))
+  , tf_buffer_(get_clock())
+  , tf_listener_(tf_buffer_)
   {
     odom_frame_ = declare_parameter<std::string>("odom_frame", "odom");
     map_frame_ = declare_parameter<std::string>("map_frame", "map");
@@ -111,27 +112,33 @@ public:
     recenter_margin_ = declare_parameter("recenter_margin", 3.0);
     depth_stride_ = declare_parameter("depth_stride", 1);
     max_range_ = declare_parameter("max_range", 7.0);
-    footprint_radius_ = declare_parameter("footprint_radius", 0.75);
+    footprint_radius_ = declare_parameter("footprint_radius", 1.2);
     goal_tolerance_ = declare_parameter("goal_tolerance", 1.0);
     max_ace_paths_ = declare_parameter("max_ace_paths", 400);
     hazard_radius_ = declare_parameter("hazard_radius", 1.0);
     cost_ = {
-      declare_parameter("slope_free_deg", 8.0) * M_PI / 180.0, declare_parameter("slope_lethal_deg", 22.0) * M_PI / 180.0,
-      declare_parameter("step_free", 0.12), declare_parameter("step_lethal", 0.50), declare_parameter("cost_weight", 4.0)};
+      declare_parameter("slope_free_deg", 8.0) * M_PI / 180.0,
+      declare_parameter("slope_lethal_deg", 22.0) * M_PI / 180.0,
+      declare_parameter("step_free", 0.12),
+      declare_parameter("step_lethal", 0.50),
+      declare_parameter("cost_weight", 4.0)};
     weights_ = {
-      declare_parameter("turn_weight", 0.3), declare_parameter("unknown_weight", 0.2),
+      declare_parameter("turn_weight", 0.3),
+      declare_parameter("unknown_weight", 0.2),
       declare_parameter("heading_change_weight", 0.3)};
     const rover_core::PathTreeConfig tree{
       degToRad(declare_parameter<std::vector<double>>(
         "tree_turns_deg", {0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 120.0, -120.0, 150.0, -150.0, 180.0})),
       declare_parameter<std::vector<double>>("tree_curvatures", {0.0, 0.2, -0.2, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6}),
-      declare_parameter("tree_segment_length", 1.2), declare_parameter("tree_step", 0.1),
+      declare_parameter("tree_segment_length", 1.2),
+      declare_parameter("tree_step", 0.1),
       declare_parameter("tree_turn_step_deg", 15.0) * M_PI / 180.0};
     tree_ = rover_core::buildPathTree(tree);
 
     const Grid<float> dem = rover_core::loadOrbitalMap(rover_core::orbitalMapPath());
     orbital_cost_ = rover_core::orbitalCost(dem, cost_);
-    observed_cost_ = Grid<float>(dem.resolution, dem.origin_x, dem.origin_y, dem.width, dem.height, rover_core::kUnknown);
+    observed_cost_ =
+      Grid<float>(dem.resolution, dem.origin_x, dem.origin_y, dem.width, dem.height, rover_core::kUnknown);
     keep_out_ = Grid<float>(dem.resolution, dem.origin_x, dem.origin_y, dem.width, dem.height, 0.0f);
     const auto keep_out = declare_parameter<std::vector<double>>("keep_out", std::vector<double>{});
     if (keep_out.size() % 3 != 0) throw std::invalid_argument("keep_out must be [x, y, radius, ...]");
@@ -156,8 +163,9 @@ public:
         intrinsics_ = rover_core::CameraIntrinsics{m->k[0], m->k[4], m->k[2], m->k[5]};
       });
     depth_sub_ = create_subscription<sensor_msgs::msg::Image>(
-      "/navcam/depth_image", rclcpp::SensorDataQoS(),
-      [this](sensor_msgs::msg::Image::ConstSharedPtr m) { onDepth(m); });
+      "/navcam/depth_image", rclcpp::SensorDataQoS(), [this](sensor_msgs::msg::Image::ConstSharedPtr m) {
+        onDepth(m);
+      });
     goal_sub_ = create_subscription<geometry_msgs::msg::PointStamped>(
       "/goal_point", 10, [this](geometry_msgs::msg::PointStamped::ConstSharedPtr m) {
         goals_ = {{m->point.x, m->point.y}};
@@ -193,7 +201,13 @@ private:
 
     const cv::Mat depth = cv_bridge::toCvShare(msg, "32FC1")->image;
     std::vector<Eigen::Vector3f> points = rover_core::depthToPoints(
-      depth.ptr<float>(), depth.cols, depth.rows, *intrinsics_, base_from_optical_, depth_stride_, rover_.navcam.near,
+      depth.ptr<float>(),
+      depth.cols,
+      depth.rows,
+      *intrinsics_,
+      base_from_optical_,
+      depth_stride_,
+      rover_.navcam.near,
       max_range_);
     // Drop returns from the rover itself, then move the rest into the odom frame.
     const float half_length = static_cast<float>(rover_.body_length / 2.0 + rover_.wheel_radius + 0.1);
@@ -216,20 +230,28 @@ private:
     double my;
     rover_core::transformPoint(*map_from_odom_, msg.point.x, msg.point.y, mx, my);
     rover_core::stampKeepOut(keep_out_, mx, my, hazard_radius_);
-    RCLCPP_WARN(get_logger(), "Hazard reported by mobility: keep-out %.1f m around (%.1f, %.1f)", hazard_radius_, mx, my);
+    RCLCPP_WARN(
+      get_logger(), "Hazard reported by mobility: keep-out %.1f m around (%.1f, %.1f)", hazard_radius_, mx, my);
   }
 
   void cycle()
   {
     ++cycles_;
-    if (!tf_buffer_.canTransform(odom_frame_, base_frame_, tf2::TimePointZero) ||
-        !tf_buffer_.canTransform(map_frame_, odom_frame_, tf2::TimePointZero)) {
+    if (
+      !tf_buffer_.canTransform(odom_frame_, base_frame_, tf2::TimePointZero) ||
+      !tf_buffer_.canTransform(map_frame_, odom_frame_, tf2::TimePointZero))
+    {
       return;
     }
     const auto odom_tf = tf_buffer_.lookupTransform(odom_frame_, base_frame_, tf2::TimePointZero);
     const Pose2 rover = toPose2(odom_tf);
     map_from_odom_ = toPose2(tf_buffer_.lookupTransform(map_frame_, odom_frame_, tf2::TimePointZero));
-    height_map_.stampFootprint(tf2::transformToEigen(odom_tf), rover_.pivotHeight(), footprint_radius_);
+    // Only at startup, before the camera has seen anything: afterwards unseen ground near the
+    // rover (e.g. behind a rock) must stay unknown rather than be assumed flat.
+    if (!footprint_stamped_) {
+      height_map_.stampFootprint(tf2::transformToEigen(odom_tf), rover_.pivotHeight(), footprint_radius_);
+      footprint_stamped_ = true;
+    }
     rover_core::stampObservedCost(observed_cost_, height_map_.elevation(), *map_from_odom_, cost_);
     if (cycles_ % 2 == 0) publishMaps();
 
@@ -284,9 +306,17 @@ private:
       msg.status = rover_msgs::msg::EnavPlan::STATUS_NO_SAFE_PATH;
       const auto & r = result.rejections;
       RCLCPP_WARN_THROTTLE(
-        get_logger(), *get_clock(), 5000,
+        get_logger(),
+        *get_clock(),
+        5000,
         "No safe path: %d candidates, ACE rejected %zu (unknown %d, tilt %d, rocker %d, bogie %d, clearance %d)",
-        result.candidates, result.ace_rejected.size(), r[1], r[2], r[3], r[4], r[5]);
+        result.candidates,
+        result.ace_rejected.size(),
+        r[1],
+        r[2],
+        r[3],
+        r[4],
+        r[5]);
     }
     RCLCPP_DEBUG(
       get_logger(), "plan %.1f ms, %d candidates, %d ACE evaluations", ms, result.candidates, result.ace_evaluations);
@@ -385,8 +415,10 @@ private:
       }
       markers.markers.push_back(m);
     };
-    for (size_t k = 0; k < std::min<size_t>(25, result.ranked.size()); ++k) add(result.ranked[k].index, 0.6f, 0.6f, 0.6f, 0.01f);
-    for (size_t k = 0; k < std::min<size_t>(25, result.ace_rejected.size()); ++k) add(result.ace_rejected[k], 0.9f, 0.1f, 0.1f, 0.02f);
+    for (size_t k = 0; k < std::min<size_t>(25, result.ranked.size()); ++k)
+      add(result.ranked[k].index, 0.6f, 0.6f, 0.6f, 0.01f);
+    for (size_t k = 0; k < std::min<size_t>(25, result.ace_rejected.size()); ++k)
+      add(result.ace_rejected[k], 0.9f, 0.1f, 0.1f, 0.02f);
     if (result.found) add(result.index, 0.1f, 0.9f, 0.2f, 0.05f);
     marker_pub_->publish(markers);
   }
@@ -418,6 +450,7 @@ private:
   std::optional<rover_core::CameraIntrinsics> intrinsics_;
   std::optional<Pose2> map_from_odom_;
   bool has_previous_{false};
+  bool footprint_stamped_{false};
   double previous_commit_yaw_{0.0};
   int cycles_{0};
 

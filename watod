@@ -124,9 +124,17 @@ else
     cd "$MONO_DIR" && . ./watod_scripts/watod-setup-docker-env.sh &> /dev/null
 fi
 
-# override to use arm64 images
+# pick the base image every module builds on
 if [ "$PLATFORM" = "arm64" ]; then
     echo "BASE_IMAGE_OVERRIDE=ghcr.io/watonomous/rover/base:humble-arm64" >> "$MODULES_DIR/.env"
+elif [ "$PLATFORM" = "local" ]; then
+    # Public stand-in for the GHCR base images (no login needed), built once on this machine
+    LOCAL_BASE_IMAGE="wato_rover/base:humble-local"
+    if ! docker image inspect "$LOCAL_BASE_IMAGE" > /dev/null 2>&1; then
+        echo "Building $LOCAL_BASE_IMAGE from docker/base/local_base.Dockerfile"
+        docker build -t "$LOCAL_BASE_IMAGE" -f "$MONO_DIR/docker/base/local_base.Dockerfile" "$MONO_DIR/docker/base"
+    fi
+    echo "BASE_IMAGE_OVERRIDE=$LOCAL_BASE_IMAGE" >> "$MODULES_DIR/.env"
 else
     echo "BASE_IMAGE_OVERRIDE=ghcr.io/watonomous/robot_base/base:humble-ubuntu22.04" >> "$MODULES_DIR/.env"
 fi

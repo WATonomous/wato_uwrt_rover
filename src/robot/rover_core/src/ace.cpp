@@ -50,7 +50,8 @@ SideBounds sideBounds(const RoverParams & p, const Interval & front, const Inter
   const double c = p.bogie_half_length;
   const Interval theta_b{std::atan2(middle.lo - rear.hi, 2.0 * c), std::atan2(middle.hi - rear.lo, 2.0 * c)};
   const double min_cos_b = std::cos(maxAbs(theta_b));
-  const Interval z_b{(middle.lo + rear.lo) / 2.0 + p.bogie_drop * min_cos_b, (middle.hi + rear.hi) / 2.0 + p.bogie_drop};
+  const Interval z_b{
+    (middle.lo + rear.lo) / 2.0 + p.bogie_drop * min_cos_b, (middle.hi + rear.hi) / 2.0 + p.bogie_drop};
 
   // Rocker: rigid link from the bogie pivot B to the front wheel F. In the rocker frame the
   // vector B->F is (dx, dz) at angle phi0; in the world it is at phi = theta_r + phi0 with
@@ -59,8 +60,7 @@ SideBounds sideBounds(const RoverParams & p, const Interval & front, const Inter
   const double dz = p.front_wheel_z - p.bogie_pivot_z;
   const double length = std::hypot(dx, dz);
   const double phi0 = std::atan2(dz, dx);
-  const Interval theta_r{
-    safeAsin((front.lo - z_b.hi) / length) - phi0, safeAsin((front.hi - z_b.lo) / length) - phi0};
+  const Interval theta_r{safeAsin((front.lo - z_b.hi) / length) - phi0, safeAsin((front.hi - z_b.lo) / length) - phi0};
 
   // Pivot height: P = B - R(theta_r) * b with b the pivot->bogie-pivot vector, so
   // z_p = z_b + g(theta_r), g(t) = -(b_x sin t + b_z cos t). Bound g over the interval.
@@ -144,7 +144,9 @@ AceMaps buildAceMaps(const RoverParams & p, const Grid<float> & elevation)
   const int inner = std::max(1, static_cast<int>(std::lround(p.wheel_width / 2.0 / res)));
   const int outer = static_cast<int>(std::ceil((p.wheel_width / 2.0 + p.ace.wheel_margin) / res));
   const int belly = static_cast<int>(std::ceil(p.body_width / 4.0 / res));
-  return {maxFilter(elevation, inner), maxFilter(elevation, outer), maxFilter(elevation, belly)};
+  // The contact patch itself must be fully observed: a rock hidden behind another rock is
+  // unknown, not flat. The wider windows tolerate gaps.
+  return {maxFilter(elevation, inner, true), maxFilter(elevation, outer, false), maxFilter(elevation, belly, false)};
 }
 
 AceResult evaluatePose(const RoverParams & p, const AceMaps & maps, const Pose2 & pose)
