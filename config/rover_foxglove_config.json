@@ -76,7 +76,7 @@
       },
       "topics": {
         "/enav/height_cloud": {
-          "visible": true,
+          "visible": false,
           "colorField": "z",
           "colorMode": "gradient",
           "gradient": [
@@ -93,7 +93,7 @@
           "visible": true
         },
         "/enav/cost": {
-          "visible": true,
+          "visible": false,
           "colorMode": "costmap",
           "alpha": 0.25
         },
@@ -110,11 +110,14 @@
         },
         "/odom": {
           "visible": false
+        },
+        "/sim/terrain": {
+          "visible": true
         }
       },
       "layers": {
         "grid": {
-          "visible": true,
+          "visible": false,
           "frameId": "map",
           "size": 60,
           "divisions": 12,

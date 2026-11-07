@@ -50,13 +50,16 @@ SCENARIO=manual ./watod up
 
 | What you see | Meaning |
 | --- | --- |
+| Mars surface (`/sim/terrain`) | The simulator's true ground, rocks and sand, lit by the same sun as the navcam. It is for you, not the rover: the rover only knows what its camera and the orbital map show it, so any gap between the rover model and the surface is localization error. Published once (about 3.5 MB), so it adds no ongoing load |
 | The rover model (body, mast, rockers, bogies, six wheels) | Drawn from its URDF with live joint angles, so you can watch the suspension articulate. The label above it says which goal it is on and how far away it is |
 | Magenta pillar "GOAL n" | The waypoint it is driving to. Orange: upcoming waypoints. Grey: reached |
 | Cyan line | The global route: cheapest path to the goal on the cost-to-go grid |
 | Thick green line | The candidate path ENav chose this cycle; the rover drives its first arc |
 | Thin red lines | Candidates ACE checked and rejected (too steep, too rough, or not enough clearance) |
-| Grey squares (dark = low, light = high) | The rover's height map from the navcam |
-| Faint coloured overlay on the ground | Route cost (slopes, observed rocks, keep-out zones) |
+| Grey squares (dark = low, light = high), off by default | The rover's height map from the navcam (`/enav/height_cloud`) |
+| Faint coloured overlay at map height 0, off by default | Route cost: slopes, observed rocks, keep-out zones (`/enav/cost`) |
+
+Turn layers on and off with the eye icons under *Topics* in the 3D panel's settings. The height map and the cost overlay are what the rover itself perceives; the terrain is what is really there.
 
 ## Operating the rover
 

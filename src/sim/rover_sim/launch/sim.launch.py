@@ -64,5 +64,7 @@ def generate_launch_description():
                 ],
                 output="screen",
             ),
+            # The true terrain as a Foxglove 3D model, published once (see the script).
+            Node(package="rover_sim", executable="terrain_viz.py", output="screen"),
         ]
     )

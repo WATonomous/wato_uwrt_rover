@@ -42,5 +42,6 @@ target_link_libraries(SimClock
 
 install(TARGETS RockerDifferential JointStates SimClock LIBRARY DESTINATION lib)
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(PROGRAMS scripts/terrain_viz.py DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

@@ -22,8 +22,10 @@ Outputs (under --out):
 """
 
 import argparse
+import json
 import math
 import os
+import struct
 
 import numpy as np
 import yaml
@@ -319,6 +321,113 @@ def write_obj(path, material, verts, uvs, normals, faces):
         np.savetxt(f, normals[used], fmt="vn %.4f %.4f %.4f")
         f.write(f"usemtl {material}\n")
         np.savetxt(f, np.repeat(faces, 3, axis=1), fmt="f %d/%d/%d %d/%d/%d %d/%d/%d")
+
+
+def write_glb(path, positions, colors, faces):
+    """Write one unlit, vertex-coloured triangle mesh as binary glTF.
+
+    Positions are ROS (z up); glTF is y up, so they are stored as (x, z, -y). Colours are the
+    sRGB values meant for the screen, stored linear as glTF requires.
+    """
+    pos = np.stack([positions[:, 0], positions[:, 2], -positions[:, 1]], 1).astype(
+        np.float32
+    )
+    col = (np.clip(colors, 0.0, 1.0) ** 2.2).astype(np.float32)
+    idx = faces.astype(np.uint32)
+    blobs = [pos.tobytes(), col.tobytes(), idx.tobytes()]
+    offsets = np.cumsum([0] + [len(b) for b in blobs])
+    views = [
+        {"buffer": 0, "byteOffset": int(o), "byteLength": len(b), "target": t}
+        for o, b, t in zip(offsets, blobs, (34962, 34962, 34963))
+    ]
+    gltf = {
+        "asset": {"version": "2.0"},
+        "extensionsUsed": ["KHR_materials_unlit"],
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0}],
+        "meshes": [
+            {
+                "primitives": [
+                    {
+                        "attributes": {"POSITION": 0, "COLOR_0": 1},
+                        "indices": 2,
+                        "material": 0,
+                    }
+                ]
+            }
+        ],
+        "materials": [
+            {
+                "pbrMetallicRoughness": {"metallicFactor": 0.0, "roughnessFactor": 1.0},
+                "extensions": {"KHR_materials_unlit": {}},
+            }
+        ],
+        "buffers": [{"byteLength": int(offsets[-1])}],
+        "bufferViews": views,
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": len(pos),
+                "type": "VEC3",
+                "min": pos.min(0).tolist(),
+                "max": pos.max(0).tolist(),
+            },
+            {"bufferView": 1, "componentType": 5126, "count": len(col), "type": "VEC3"},
+            {
+                "bufferView": 2,
+                "componentType": 5125,
+                "count": idx.size,
+                "type": "SCALAR",
+            },
+        ],
+    }
+    header = json.dumps(gltf, separators=(",", ":")).encode()
+    header += b" " * (-len(header) % 4)
+    body = b"".join(blobs)  # every blob is a multiple of 4 bytes
+    with open(path, "wb") as f:
+        f.write(
+            struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(header) + 8 + len(body))
+        )
+        f.write(struct.pack("<II", len(header), 0x4E4F534A) + header)
+        f.write(struct.pack("<II", len(body), 0x004E4942) + body)
+
+
+def terrain_viz(cfg, xs, height, sand, normals, rock_verts, rock_faces):
+    """The terrain and rocks as one light mesh for the Foxglove 3D view.
+
+    Every other terrain vertex (30 cm), but shaded with the full-resolution normals under the
+    simulator's sun and ambient light, so it reads like the navcam view. Draws from its own
+    random generator so the world itself does not change.
+    """
+    rng = np.random.default_rng(cfg["seed"] + 1)
+    n = xs.size
+    keep = np.arange(0, n, 2)
+    m = keep.size
+    gx, gy = np.meshgrid(xs[keep], xs[keep])
+    ground = np.stack([gx.ravel(), gy.ravel(), height[np.ix_(keep, keep)].ravel()], 1)
+    ground_normals = normals.reshape(n, n, 3)[np.ix_(keep, keep)].reshape(-1, 3)
+    soil, sand_rgb, rock = (0.62, 0.40, 0.26), (0.76, 0.57, 0.40), (0.42, 0.34, 0.29)
+    albedo = np.where(sand[np.ix_(keep, keep)].reshape(-1, 1), sand_rgb, soil)
+    faces, _ = terrain_faces(m)
+
+    positions = np.concatenate([ground, rock_verts])
+    all_normals = np.concatenate(
+        [ground_normals, vertex_normals(rock_verts, rock_faces)]
+    )
+    albedo = np.concatenate([albedo, np.tile(rock, (len(rock_verts), 1))])
+    lambert = np.clip(all_normals @ sun_vector(cfg["sun"]), 0.0, None)[:, None]
+    # Gazebo's ambient and sun colours, dimmed to the brightness of the navcam images.
+    light = 0.85 * (
+        np.array([0.45, 0.38, 0.33]) + np.array([1.0, 0.95, 0.88]) * lambert
+    )
+    grain = 1.0 + 0.06 * rng.standard_normal((len(positions), 1))
+    return (
+        positions,
+        albedo * light * grain,
+        np.concatenate([faces, rock_faces + len(ground)]),
+    )
 
 
 def write_mtl(path, material, texture):
@@ -770,10 +879,17 @@ def terrain_sdf(surfaces, friction):
     )
 
 
+def sun_vector(sun):
+    """Unit vector from the ground towards the sun."""
+    az, el = math.radians(sun["azimuth_deg"]), math.radians(sun["elevation_deg"])
+    return np.array(
+        [math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el)]
+    )
+
+
 def world_sdf(cfg, spawn_z):
     sun = cfg["sun"]
-    az, el = math.radians(sun["azimuth_deg"]), math.radians(sun["elevation_deg"])
-    to_sun = (math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el))
+    to_sun = sun_vector(sun)
     spawn = cfg["spawn"]
     yaw = math.radians(spawn["yaw_deg"])
     plugins = "".join(
@@ -967,6 +1083,12 @@ def main():
         f.write(world_sdf(cfg, pad_height + pivot_height + 0.03))
 
     dem, origin = orbital_dem(cfg, rng, height, xs, shapes)
+    viz_dir = os.path.join(args.out, "viz")
+    os.makedirs(viz_dir, exist_ok=True)
+    write_glb(
+        os.path.join(viz_dir, "terrain.glb"),
+        *terrain_viz(cfg, xs, height, sand, normals, rock_verts, rock_faces),
+    )
     orbital_dir = os.path.join(args.out, "orbital")
     os.makedirs(orbital_dir, exist_ok=True)
     dem.tofile(os.path.join(orbital_dir, "orbital_dem.f32"))

@@ -31,7 +31,7 @@ add_custom_command(
 add_custom_target(generate_world ALL DEPENDS ${GEN_DIR}/worlds/mars.sdf)
 
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
-install(DIRECTORY ${GEN_DIR}/models ${GEN_DIR}/worlds ${GEN_DIR}/orbital DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY ${GEN_DIR}/models ${GEN_DIR}/worlds ${GEN_DIR}/orbital ${GEN_DIR}/viz DESTINATION share/${PROJECT_NAME})
 install(PROGRAMS tools/gen_world.py DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
