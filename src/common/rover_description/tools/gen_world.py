@@ -568,8 +568,10 @@ def rover_sdf(rover):
       <odom_publish_frequency>1</odom_publish_frequency>
       <topic>/cmd_vel</topic>
     </plugin>
-    <plugin filename='ignition-gazebo-joint-state-publisher-system'
-            name='ignition::gazebo::systems::JointStatePublisher'/>
+    <plugin filename='JointStates' name='rover_sim::JointStates'>
+      <rate>{rover["joint_state_rate"]}</rate>
+      <topic>/world/mars/model/rover/joint_state</topic>
+    </plugin>
     <plugin filename='ignition-gazebo-odometry-publisher-system'
             name='ignition::gazebo::systems::OdometryPublisher'>
       <odom_frame>map</odom_frame>
@@ -637,8 +639,8 @@ def world_sdf(cfg, spawn_z):
     return f"""<?xml version='1.0'?>
 <sdf version='1.8'>
   <world name='mars'>
-    <physics name='2ms' type='ignored'>
-      <max_step_size>0.002</max_step_size>
+    <physics name='4ms' type='ignored'>
+      <max_step_size>0.004</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
     <gravity>0 0 {-cfg["gravity"]}</gravity>{plugins}

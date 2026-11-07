@@ -90,6 +90,10 @@ Grid<float> combineCost(const Grid<float> & orbital, const Grid<float> & observe
 // Every passable cell within goal_radius of the goal is a source.
 Grid<float> costToGo(const Grid<float> & cost, double goal_x, double goal_y, double goal_radius, double cost_weight);
 
+// The global route from (x, y): steepest descent through cost-to-go, cell centres in the map
+// frame. Empty when (x, y) cannot reach the goal.
+std::vector<Pose2> routeToGoal(const Grid<float> & cost_to_go, double x, double y);
+
 // ------------------------------------------------------------------ planner
 
 struct RankWeights

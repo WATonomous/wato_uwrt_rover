@@ -33,17 +33,30 @@ A ROS 2 navigation stack that works the way NASA's Perseverance rover navigates,
    - **Foxglove**: open [Foxglove](https://app.foxglove.dev), *Open connection* → `ws://localhost:<FOXGLOVE_BRIDGE_PORT>` (the port is in `modules/.env`), then *Import layout* → `config/rover_foxglove_config.json`.
    - **Gazebo**: open [app.gazebosim.org/visualization](https://app.gazebosim.org/visualization) and connect to `ws://localhost:<GAZEBO_PORT>`.
 
-The default scenario is a long traverse. Pick another with the `SCENARIO` variable:
+The default scenario is a long traverse: the rover spins once in place to map its surroundings, then drives to six waypoints on its own. Pick another with the `SCENARIO` variable, e.g. `manual` to choose the goals yourself:
 
 ```bash
-SCENARIO=sand_trap ./watod up
+SCENARIO=manual ./watod up
 ```
 
 | Scenario | What it shows |
 | --- | --- |
 | `traverse` | ~120 m loop over six waypoints: route planning around craters, odometry drift and orbital fixes. The dune is a ground-planned keep-out zone. |
+| `manual` | No waypoints: after its startup panorama the rover waits for you to click a goal. |
 | `rock_field` | Straight into a dense rock field: ACE threads between rocks it cannot straddle. |
 | `sand_trap` | A goal on the sandy flank of a dune (~14–15° there, which ACE accepts) with no keep-out zone. The sand is meant to be too loose to climb, so slip detection should stop the rover, then it backs out and marks the hazard. See *Simulation notes*: in Gazebo the sand has not actually cost the rover traction so far. |
+
+## Reading the 3D view
+
+| What you see | Meaning |
+| --- | --- |
+| Grey box with a label above it | The rover; the label says which goal it is on and how far away it is |
+| Magenta pillar "GOAL n" | The waypoint it is driving to. Orange: upcoming waypoints. Grey: reached |
+| Cyan line | The global route: cheapest path to the goal on the cost-to-go grid |
+| Thick green line | The candidate path ENav chose this cycle; the rover drives its first arc |
+| Thin red lines | Candidates ACE checked and rejected (too steep, too rough, or not enough clearance) |
+| Grey squares (dark = low, light = high) | The rover's height map from the navcam |
+| Faint coloured overlay on the ground | Route cost (slopes, observed rocks, keep-out zones) |
 
 ## Operating the rover
 
@@ -169,7 +182,11 @@ Unit tests cover ACE (including a check that the bounds contain every exact conf
 
 ## Simulation notes
 
-- Gazebo renders the camera in software inside Docker on a Mac, so the navcam is 320×240 at 5 Hz. That keeps the simulator at real time with about 2.5 CPU cores. Everything uses sim time, so a slower machine only slows the run down.
+- Gazebo renders the camera in software inside Docker on a Mac, so the navcam is 320×240 at 5 Hz.
+  - Physics steps at 4 ms, and joint states are published at 50 Hz by a small plugin (`rover_sim/JointStates`). Fortress's own publisher sends them every physics step.
+  - With these, the whole stack runs at real time on an M1 using about 1.5 CPU cores.
+  - Everything uses sim time, so a slower machine only slows the run down.
+- The rover drives at 0.4 m/s and turns in place at 0.5 rad/s, much faster than Perseverance (about 0.04 m/s), to keep demos short (`drive` in `rover.yaml`).
 - Depth comes straight from Gazebo's RGB-D camera instead of stereo matching.
 - The sun sensor and the `eval` node read Gazebo ground truth (`/sim/*`). Nothing else does.
 - Gazebo's diff drive commands wheel velocities with no torque limit, so wheels never stall in sim; stall detection matters on hardware.

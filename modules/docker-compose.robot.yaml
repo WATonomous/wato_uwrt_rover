@@ -11,7 +11,7 @@ services:
     image: "${ROBOT_IMAGE:?}:${TAG}"
     profiles:
       - deploy
-    # SCENARIO: traverse (default), rock_field or sand_trap (src/robot/bringup_robot/config/scenarios)
+    # SCENARIO: traverse (default), manual, rock_field or sand_trap (src/robot/bringup_robot/config/scenarios)
     command: /bin/bash -c "ros2 launch bringup_robot robot.launch.py scenario:=${SCENARIO:-traverse}"
 
   robot_dev:

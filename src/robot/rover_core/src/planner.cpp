@@ -204,6 +204,31 @@ Grid<float> costToGo(const Grid<float> & cost, double goal_x, double goal_y, dou
   return ctg;
 }
 
+std::vector<Pose2> routeToGoal(const Grid<float> & cost_to_go, double x, double y)
+{
+  std::vector<Pose2> route;
+  int i;
+  int j;
+  if (!cost_to_go.cellOf(x, y, i, j) || std::isinf(cost_to_go.at(i, j))) return route;
+  // Each step strictly lowers cost-to-go, so the walk ends at a goal seed (a local minimum).
+  while (true) {
+    route.push_back({cost_to_go.cellX(i), cost_to_go.cellY(j), 0.0});
+    int best_i = i;
+    int best_j = j;
+    for (int dj = -1; dj <= 1; ++dj) {
+      for (int di = -1; di <= 1; ++di) {
+        if (cost_to_go.contains(i + di, j + dj) && cost_to_go.at(i + di, j + dj) < cost_to_go.at(best_i, best_j)) {
+          best_i = i + di;
+          best_j = j + dj;
+        }
+      }
+    }
+    if (best_i == i && best_j == j) return route;
+    i = best_i;
+    j = best_j;
+  }
+}
+
 std::vector<PathPose> toOdom(const CandidatePath & path, const Pose2 & rover)
 {
   std::vector<PathPose> out;

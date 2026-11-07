@@ -56,5 +56,5 @@ export ACTIVE_MODULES="robot gazebo vis_tools"
 ##   - amd64 : WATonomous GHCR image for most computers (needs GHCR access)
 export PLATFORM="local"
 
-## Navigation scenario for the robot module: traverse, rock_field or sand_trap
+## Navigation scenario for the robot module: traverse, manual (click goals), rock_field or sand_trap
 # export SCENARIO="traverse"

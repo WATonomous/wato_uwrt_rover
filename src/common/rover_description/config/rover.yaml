@@ -49,6 +49,8 @@ navcam:
   near: 0.3
   far: 10.0
 
+joint_state_rate: 50.0  # Hz, wheel encoders and suspension angles
+
 imu:
   rate: 50.0
   gyro_noise: 0.002  # rad/s
@@ -60,8 +62,8 @@ sun_sensor:
   noise: 0.005  # rad, angular noise of the measured sun direction
 
 drive:
-  speed: 0.25  # m/s nominal forward speed
-  turn_rate: 0.35  # rad/s for turn-in-place
+  speed: 0.4  # m/s nominal forward speed
+  turn_rate: 0.5  # rad/s for turn-in-place
   max_accel: 0.5  # m/s^2
 
 # Limits the planner (ACE) must respect. Stricter than the fault limits below so a

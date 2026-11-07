@@ -66,7 +66,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "scenario",
                 default_value="traverse",
-                description="config/scenarios/<name>.yaml (traverse, rock_field, sand_trap)",
+                description="config/scenarios/<name>.yaml (traverse, manual, rock_field, sand_trap)",
             ),
             DeclareLaunchArgument(
                 "sim",

@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <optional>
 #include <string>
@@ -136,7 +137,8 @@ public:
       declare_parameter("tree_turn_step_deg", 15.0) * M_PI / 180.0};
     tree_ = rover_core::buildPathTree(tree);
 
-    const Grid<float> dem = rover_core::loadOrbitalMap(rover_core::orbitalMapPath());
+    dem_ = rover_core::loadOrbitalMap(rover_core::orbitalMapPath());
+    const Grid<float> & dem = dem_;
     orbital_cost_ = rover_core::orbitalCost(dem, cost_);
     observed_cost_ =
       Grid<float>(dem.resolution, dem.origin_x, dem.origin_y, dem.width, dem.height, rover_core::kUnknown);
@@ -148,8 +150,8 @@ public:
     }
     const auto waypoints = declare_parameter<std::vector<double>>("waypoints", std::vector<double>{});
     if (waypoints.size() % 2 != 0) throw std::invalid_argument("waypoints must be [x, y, ...]");
-    for (size_t k = 0; k < waypoints.size(); k += 2) goals_.push_back({waypoints[k], waypoints[k + 1]});
-    RCLCPP_INFO(get_logger(), "Path tree: %zu candidates, %zu waypoints", tree_.size(), goals_.size());
+    for (size_t k = 0; k < waypoints.size(); k += 2) waypoints_.push_back({waypoints[k], waypoints[k + 1]});
+    RCLCPP_INFO(get_logger(), "Path tree: %zu candidates, %zu waypoints", tree_.size(), waypoints_.size());
 
     plan_pub_ = create_publisher<rover_msgs::msg::EnavPlan>("/enav/plan", 10);
     height_pub_ = create_publisher<rover_msgs::msg::HeightMap>("/enav/height_map", 1);
@@ -157,6 +159,7 @@ public:
     cost_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>("/enav/cost", 1);
     ctg_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>("/enav/cost_to_go", 1);
     marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/enav/candidates", 1);
+    mission_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/enav/mission", 1);
     goal_pub_ = create_publisher<geometry_msgs::msg::PointStamped>("/enav/goal", 1);
 
     info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
@@ -169,7 +172,9 @@ public:
       });
     goal_sub_ = create_subscription<geometry_msgs::msg::PointStamped>(
       "/goal_point", 10, [this](geometry_msgs::msg::PointStamped::ConstSharedPtr m) {
-        goals_ = {{m->point.x, m->point.y}};
+        waypoints_ = {{m->point.x, m->point.y}};
+        next_ = 0;
+        has_previous_ = false;
         RCLCPP_INFO(get_logger(), "New goal (%.1f, %.1f)", m->point.x, m->point.y);
       });
     hazard_sub_ = create_subscription<geometry_msgs::msg::PointStamped>(
@@ -260,17 +265,18 @@ private:
     msg.header.stamp = odom_tf.header.stamp;
     msg.header.frame_id = odom_frame_;
     msg.path.header = msg.header;
-    if (goals_.empty()) {
+    const Pose2 rover_map = rover_core::compose(*map_from_odom_, rover);
+    if (next_ >= waypoints_.size()) {
       msg.status = rover_msgs::msg::EnavPlan::STATUS_IDLE;
       plan_pub_->publish(msg);
+      publishMission(rover_map, {});
       return;
     }
-    const Pose2 rover_map = rover_core::compose(*map_from_odom_, rover);
-    const Goal goal = goals_.front();
+    const Goal goal = waypoints_[next_];
     publishGoal(goal);
     if (std::hypot(goal.x - rover_map.x, goal.y - rover_map.y) < goal_tolerance_) {
-      RCLCPP_INFO(get_logger(), "Reached waypoint (%.1f, %.1f)", goal.x, goal.y);
-      goals_.erase(goals_.begin());
+      RCLCPP_INFO(get_logger(), "Reached waypoint %zu/%zu (%.1f, %.1f)", next_ + 1, waypoints_.size(), goal.x, goal.y);
+      ++next_;
       has_previous_ = false;
       msg.status = rover_msgs::msg::EnavPlan::STATUS_GOAL_REACHED;
       plan_pub_->publish(msg);
@@ -322,7 +328,8 @@ private:
     RCLCPP_DEBUG(
       get_logger(), "plan %.1f ms, %d candidates, %d ACE evaluations", ms, result.candidates, result.ace_evaluations);
     plan_pub_->publish(msg);
-    publishCandidates(result, rover, odom_tf.transform.translation.z);
+    publishCandidates(result, rover, odom_tf.transform.translation.z - rover_.pivotHeight() + 0.1);
+    publishMission(rover_map, rover_core::routeToGoal(ctg, rover_map.x, rover_map.y));
     if (cycles_ % 4 == 0) {
       double max_ctg = 1.0;
       for (float v : ctg.data) {
@@ -416,12 +423,114 @@ private:
       }
       markers.markers.push_back(m);
     };
-    for (size_t k = 0; k < std::min<size_t>(25, result.ranked.size()); ++k)
-      add(result.ranked[k].index, 0.6f, 0.6f, 0.6f, 0.01f);
-    for (size_t k = 0; k < std::min<size_t>(25, result.ace_rejected.size()); ++k)
-      add(result.ace_rejected[k], 0.9f, 0.1f, 0.1f, 0.02f);
-    if (result.found) add(result.index, 0.1f, 0.9f, 0.2f, 0.05f);
+    // Red: paths ACE checked and rejected this cycle. Green: the path being driven.
+    for (size_t k = 0; k < std::min<size_t>(25, result.ace_rejected.size()); ++k) {
+      add(result.ace_rejected[k], 1.0f, 0.15f, 0.15f, 0.025f);
+    }
+    if (result.found) add(result.index, 0.2f, 1.0f, 0.3f, 0.08f);
     marker_pub_->publish(markers);
+  }
+
+  // Where the rover is going: waypoint pillars (done grey, current magenta, upcoming orange),
+  // the global route down the cost-to-go grid, and the rover body with a status label.
+  void publishMission(const Pose2 & rover_map, const std::vector<Pose2> & route)
+  {
+    visualization_msgs::msg::MarkerArray markers;
+    visualization_msgs::msg::Marker clear;
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    markers.markers.push_back(clear);
+    auto marker = [&](const std::string & frame, int type, float r, float g, float b, float a) {
+      visualization_msgs::msg::Marker m;
+      m.header.frame_id = frame;
+      m.header.stamp = now();
+      m.ns = "mission";
+      m.id = static_cast<int>(markers.markers.size());
+      m.type = type;
+      m.color.r = r;
+      m.color.g = g;
+      m.color.b = b;
+      m.color.a = a;
+      m.pose.orientation.w = 1.0;
+      return m;
+    };
+    auto ground = [&](double x, double y) {
+      const float z = rover_core::bilinear(dem_, x, y);
+      return std::isnan(z) ? 0.0 : static_cast<double>(z);
+    };
+
+    for (size_t k = 0; k < waypoints_.size(); ++k) {
+      const bool current = k == next_;
+      const bool done = k < next_;
+      auto pillar = marker(
+        map_frame_,
+        visualization_msgs::msg::Marker::CYLINDER,
+        done ? 0.5f : 1.0f,
+        done      ? 0.5f
+        : current ? 0.2f
+                  : 0.6f,
+        done      ? 0.5f
+        : current ? 0.9f
+                  : 0.1f,
+        done ? 0.5f : 0.9f);
+      const double height = current ? 2.0 : 1.2;
+      pillar.pose.position.x = waypoints_[k].x;
+      pillar.pose.position.y = waypoints_[k].y;
+      pillar.pose.position.z = ground(waypoints_[k].x, waypoints_[k].y) + height / 2.0;
+      pillar.scale.x = pillar.scale.y = current ? 0.4 : 0.25;
+      pillar.scale.z = height;
+      markers.markers.push_back(pillar);
+
+      auto label = marker(map_frame_, visualization_msgs::msg::Marker::TEXT_VIEW_FACING, 1.0f, 1.0f, 1.0f, 1.0f);
+      label.pose.position = pillar.pose.position;
+      label.pose.position.z += height / 2.0 + 0.4;
+      label.scale.z = current ? 0.6 : 0.4;
+      label.text = (current ? "GOAL " : "") + std::to_string(k + 1);
+      markers.markers.push_back(label);
+    }
+
+    if (!route.empty()) {
+      auto line = marker(map_frame_, visualization_msgs::msg::Marker::LINE_STRIP, 0.1f, 0.85f, 1.0f, 0.9f);
+      line.scale.x = 0.08;
+      for (const auto & p : route) {
+        geometry_msgs::msg::Point pt;
+        pt.x = p.x;
+        pt.y = p.y;
+        pt.z = ground(p.x, p.y) + 0.15;
+        line.points.push_back(pt);
+      }
+      markers.markers.push_back(line);
+    }
+
+    auto body = marker(base_frame_, visualization_msgs::msg::Marker::CUBE, 0.85f, 0.85f, 0.85f, 0.9f);
+    body.frame_locked = true;
+    body.pose.position.z = rover_.body_center_z;
+    body.scale.x = rover_.body_length;
+    body.scale.y = rover_.body_width;
+    body.scale.z = rover_.body_height;
+    markers.markers.push_back(body);
+
+    auto status = marker(base_frame_, visualization_msgs::msg::Marker::TEXT_VIEW_FACING, 1.0f, 1.0f, 1.0f, 1.0f);
+    status.frame_locked = true;
+    status.pose.position.z = 1.4;
+    status.scale.z = 0.35;
+    if (waypoints_.empty()) {
+      status.text = "no goal: use Publish point";
+    } else if (next_ >= waypoints_.size()) {
+      status.text = "all waypoints reached";
+    } else {
+      const Goal & g = waypoints_[next_];
+      char buf[64];
+      std::snprintf(
+        buf,
+        sizeof(buf),
+        "goal %zu/%zu: %.1f m",
+        next_ + 1,
+        waypoints_.size(),
+        std::hypot(g.x - rover_map.x, g.y - rover_map.y));
+      status.text = buf;
+    }
+    markers.markers.push_back(status);
+    mission_pub_->publish(markers);
   }
 
   const rover_core::RoverParams rover_;
@@ -444,10 +553,12 @@ private:
   rover_core::RankWeights weights_;
   std::vector<rover_core::CandidatePath> tree_;
 
+  Grid<float> dem_;
   Grid<float> orbital_cost_;
   Grid<float> observed_cost_;
   Grid<float> keep_out_;
-  std::vector<Goal> goals_;
+  std::vector<Goal> waypoints_;  // map frame
+  size_t next_{0};  // index of the current goal in waypoints_
   std::optional<rover_core::CameraIntrinsics> intrinsics_;
   std::optional<Pose2> map_from_odom_;
   bool has_previous_{false};
@@ -461,6 +572,7 @@ private:
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr cost_pub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr ctg_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr mission_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr goal_pub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr info_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub_;

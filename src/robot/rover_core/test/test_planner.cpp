@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -69,6 +70,19 @@ TEST(CostToGo, RoutesAroundWalls)
   EXPECT_TRUE(std::isfinite(from_left));
   EXPECT_GT(from_left, 14.0);  // straight line is 8 m; the route detours around the wall's end
   EXPECT_LT(ctg.valueAt(9.0, 1.0, kLethal), 0.2f);  // seeded with the distance to the goal
+
+  // The route goes up and over the wall's end, then down to the goal.
+  const auto route = routeToGoal(ctg, 1.0, 1.0);
+  ASSERT_GT(route.size(), 2u);
+  EXPECT_NEAR(route.back().x, 9.0, 0.3);
+  EXPECT_NEAR(route.back().y, 1.0, 0.3);
+  double highest = 0.0;
+  for (const auto & p : route) {
+    highest = std::max(highest, p.y);
+    EXPECT_FALSE(std::isinf(cost.valueAt(p.x, p.y, kLethal)));  // never through the wall
+  }
+  EXPECT_GT(highest, 8.75);
+  EXPECT_TRUE(routeToGoal(ctg, 5.1, 1.0).empty());  // inside the wall: unreachable
 
   // Fully enclosed goal: everything outside is unreachable.
   Grid<float> boxed(0.25, 0.0, 0.0, 40, 40, 0.0f);

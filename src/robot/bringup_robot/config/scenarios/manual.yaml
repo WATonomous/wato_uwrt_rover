@@ -1,0 +1,6 @@
+---
+# No waypoints: the rover does its startup panorama and then waits. Give it a goal with
+# Foxglove's "Publish point" tool in the 3D panel (publishes /goal_point in the map frame).
+mobility:
+  ros__parameters:
+    auto_recover: true

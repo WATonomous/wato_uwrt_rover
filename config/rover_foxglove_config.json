@@ -3,7 +3,7 @@
     "3D!enav": {
       "cameraState": {
         "perspective": true,
-        "distance": 18,
+        "distance": 25,
         "phi": 45,
         "thetaOffset": 45,
         "targetOffset": [
@@ -48,18 +48,24 @@
         "/enav/height_cloud": {
           "visible": true,
           "colorField": "z",
-          "colorMode": "colormap",
-          "colorMap": "turbo",
-          "pointSize": 4,
+          "colorMode": "gradient",
+          "gradient": [
+            "#2b2b2bff",
+            "#d9d9d9ff"
+          ],
+          "pointSize": 3,
           "pointShape": "square"
         },
         "/enav/candidates": {
           "visible": true
         },
+        "/enav/mission": {
+          "visible": true
+        },
         "/enav/cost": {
           "visible": true,
           "colorMode": "costmap",
-          "alpha": 0.5
+          "alpha": 0.25
         },
         "/enav/cost_to_go": {
           "visible": false

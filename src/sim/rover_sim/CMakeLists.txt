@@ -28,7 +28,13 @@ target_link_libraries(RockerDifferential
   ignition-plugin1::register
 )
 
-install(TARGETS RockerDifferential LIBRARY DESTINATION lib)
+add_library(JointStates SHARED src/joint_states.cpp)
+target_link_libraries(JointStates
+  ignition-gazebo6::ignition-gazebo6
+  ignition-plugin1::register
+)
+
+install(TARGETS RockerDifferential JointStates LIBRARY DESTINATION lib)
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_package()
