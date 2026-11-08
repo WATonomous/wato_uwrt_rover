@@ -108,6 +108,7 @@ flowchart LR
 - **Position**:
   - Wheel odometry is integrated as it arrives.
   - When a visual odometry frame covers an interval, its translation replaces the wheel motion over that interval, as Perseverance does.
+  - Only the translation within the rover's deck plane is used: the rover cannot rise through its own chassis. VO's out-of-plane component was biased (+1.4 % of distance in simulation), and that false climb left false steps in ENav's height map.
   - With all wheels still, VO is ignored (zero-velocity update).
 - **Slip**: `1 − VO forward distance / wheel forward distance` over the last 0.6 m driven, signed. 0 is clean rolling, 1 is wheels spinning in place, above 1 is sliding back while the wheels drive forward.
 - **Global fixes**: every 8 m, the local height map is matched against the orbital DEM.
@@ -148,7 +149,7 @@ Each cycle (2 Hz), while the rover is still driving the previous arc:
 | Stall | commanded wheel turning, measured wheel not, for 2 s |
 | No safe path | ENav found no safe path for 10 cycles in a row |
 
-On a fault the rover stops. With `auto_recover` it retraces its own trail backwards for up to 1 m (ground it has just driven over, so no blind turns). For slip, suspension and stall faults it also reports a 1.5 m keep-out zone to ENav. The 360° panorama only happens once, at startup on the flat landing pad: it is a blind turn ACE never checks. After `max_recoveries` attempts it waits for the ground. 30 s of fault-free driving restores the budget.
+On a fault the rover stops. With `auto_recover` it retraces its own trail backwards for up to 1 m (ground it has just driven over, so no blind turns). For slip, suspension and stall faults it also reports a 1.5 m keep-out zone to ENav. After backing out of a *no safe path* fault it also looks around: a 360° turn in place, during which ENav throws away its height map and maps the terrain afresh. Odometry errors (such as a slip) can leave false steps where terrain seen before the error meets terrain seen after it, and those can block every path; a fresh map has none. The turn is not checked by ACE, but it happens on the rover's own trail and fault protection stays on. The same panorama runs at startup on the landing pad. After `max_recoveries` attempts it waits for the ground. 30 s of fault-free driving restores the budget.
 
 ## Measured results
 
@@ -156,7 +157,7 @@ Simulation runs on an Apple M1 (Docker Desktop, software rendering). Errors are 
 
 | Scenario | Outcome |
 | --- | --- |
-| `traverse` | **All 6 waypoints reached** in ~7.5 min (152 m) around the mounds and boulder walls. Two faults, both auto-recovered: a bogie spike on a rock, and no safe path on the crater rim next to waypoint 4. Final estimate error 0.08 m; odometry alone drifted 0.3 % of distance. Planning ~14 ms per cycle. Before the mounds and boulders, a 133 m run reached every waypoint with no faults. |
+| `traverse` | **All 6 waypoints reached** in ~6 min (134 m) around the mounds and boulder walls, no faults. Final estimate error 0.10 m; odometry alone drifted 0.4 % of distance. Planning ~14 ms per cycle. An unreachable goal (inside a boulder) gives repeated *no safe path* faults, each followed by a back-out and a look-around, until the recovery budget runs out and the rover waits for the ground. |
 | `rock_field` | Goal reached through the dense rock field, 32.4 m, no faults. Final estimate error 0.12 m, odometry alone 0.45 m (1.4 %). Run with `./watod up`. |
 | `sand_trap` | Both waypoints reached with no faults: the sand did not cost traction in Gazebo (see *Simulation notes*). |
 

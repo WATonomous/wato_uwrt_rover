@@ -26,6 +26,11 @@ namespace
 constexpr double kHistorySeconds = 10.0;
 constexpr double kStampTolerance = 0.03;
 constexpr double kDistanceVariance = 0.03;  // position std grows by this fraction of distance
+// m of forward wheel travel a VO interval needs to count towards slip. Turning in place moves
+// the wheels but not the rover forward (their mean is ~0); VO's forward noise over such an
+// interval is not slip, and would swamp the estimate once driving resumes. A slipping rover
+// still spins its wheels forward (0.4 m/s gives ~0.04 m per VO interval).
+constexpr double kMinSlipSample = 0.01;
 
 Eigen::Quaterniond rotationVectorToQuaternion(const Eigen::Vector3d & v)
 {
@@ -107,8 +112,12 @@ std::optional<DeadReckoning::VoUpdate> DeadReckoning::applyVisualOdometry(
   const Entry & e0 = history_[i0];
   const Entry & e1 = history_[i1];
 
+  // The rover moves in its own deck plane: it cannot rise through its chassis, so VO's
+  // body-frame z is error. It is biased (~1.4 % of distance driven in simulation), and the
+  // false climb made ENav's height map step where older and newer observations met.
+  const Eigen::Vector3d planar(translation.x(), translation.y(), 0.0);
   // Earlier corrections shifted e0 and e1 together, so their difference is wheel motion only.
-  const Eigen::Vector3d correction = e0.attitude * translation - (e1.position - e0.position);
+  const Eigen::Vector3d correction = e0.attitude * planar - (e1.position - e0.position);
   // Signed forward progress: a rover sliding back while its wheels drive forward must not
   // look like a rover that is moving fine.
   const VoUpdate update{e1.distance - e0.distance, translation.x()};
@@ -119,6 +128,7 @@ std::optional<DeadReckoning::VoUpdate> DeadReckoning::applyVisualOdometry(
 
 void SlipEstimator::add(double stamp, double wheel_distance, double vo_distance)
 {
+  if (std::abs(wheel_distance) < kMinSlipSample) return;
   samples_.push_back({stamp, wheel_distance, vo_distance});
   // Keep the newest samples that make up the window distance.
   double total = 0.0;

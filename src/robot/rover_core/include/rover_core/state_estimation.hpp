@@ -87,7 +87,8 @@ public:
   };
 
   // Replace the wheel motion over [t0, t1] with a VO translation expressed in base_link at
-  // t0. Returns nullopt when the history does not cover the interval.
+  // t0. Its z (out of the deck plane) is ignored. Returns nullopt when the history does not
+  // cover the interval.
   std::optional<VoUpdate> applyVisualOdometry(double t0, double t1, const Eigen::Vector3d & translation);
 
   const Eigen::Vector3d & position() const

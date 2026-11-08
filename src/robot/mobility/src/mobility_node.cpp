@@ -13,8 +13,10 @@
 // limitations under the License.
 
 // Mobility: executes ENav's committed arc and owns fault protection.
-//   PANORAMA   rotate once in place at startup (on the flat landing pad) so ENav has terrain
-//              all around; never used for recovery, since the turn is not checked by ACE
+//   PANORAMA   rotate once in place so ENav maps the terrain all around from scratch: at
+//              startup (on the flat landing pad), and after backing out of a "no safe path"
+//              fault (on the rover's own trail). The turn is not checked by ACE, but fault
+//              protection stays on.
 //   IDLE       wait for a plan
 //   DRIVING    turn in place to the path heading, then pure-pursuit along the committed arc
 //   FAULT      stopped; tilt / suspension / slip / stall / no safe path. Cleared by
@@ -239,7 +241,13 @@ private:
           case Backout::kGoing:
             break;
           case Backout::kDone:
-            setMode(Mode::kIdle, Fault::kNone, "backed out");
+            // With no safe path the map itself may be wrong (odometry errors leave false steps
+            // between old and new terrain), so look all around and let ENav map afresh.
+            if (fault_before_recovery_ == Fault::kNoSafePath) {
+              setMode(Mode::kPanorama, Fault::kNone, "backed out; looking around to re-map");
+            } else {
+              setMode(Mode::kIdle, Fault::kNone, "backed out");
+            }
             break;
           case Backout::kStuck:
             // Do not keep thrashing: stop and wait for the ground.

@@ -116,6 +116,24 @@ TEST(DeadReckoning, VisualOdometryReplacesWheelMotionAndRevealsSlip)
   EXPECT_FALSE(dr.applyVisualOdometry(t - 100.0, t, Eigen::Vector3d::Zero()).has_value());
 }
 
+TEST(DeadReckoning, VisualOdometryCannotLiftTheRoverOffItsDeckPlane)
+{
+  DeadReckoning dr;
+  const Eigen::Quaterniond uphill = rpy(0, -0.2, 0);  // driving east, nose up ~11 deg
+  double t = 0.0;
+  dr.addWheelMotion(t, 0.0, uphill);
+  for (int frame = 0; frame < 100; ++frame) {
+    const double t0 = t;
+    t += 0.2;
+    dr.addWheelMotion(t, 0.05, uphill);
+    // VO with a 1 cm/frame upward bias in the body frame (20 % of the forward motion).
+    ASSERT_TRUE(dr.applyVisualOdometry(t0, t, Eigen::Vector3d(0.05, 0.0, 0.01)).has_value());
+  }
+  // 5 m up an 11 deg slope: the climb comes from the attitude, none from the VO bias.
+  EXPECT_NEAR(dr.position().x(), 5.0 * std::cos(0.2), 1e-9);
+  EXPECT_NEAR(dr.position().z(), 5.0 * std::sin(0.2), 1e-9);
+}
+
 TEST(SlipEstimator, NeedsDistanceAndForgetsOldSamples)
 {
   SlipEstimator slip(0.5, 0.2, 5.0);
@@ -125,6 +143,19 @@ TEST(SlipEstimator, NeedsDistanceAndForgetsOldSamples)
   ASSERT_TRUE(slip.slip(1.0).has_value());
   EXPECT_NEAR(*slip.slip(1.0), 1.0 - 0.1 / 0.3, 1e-9);
   EXPECT_FALSE(slip.slip(100.0).has_value());
+}
+
+TEST(SlipEstimator, TurningInPlaceIsNotSlip)
+{
+  SlipEstimator slip(0.6, 0.25, 6.0);
+  double t = 0.0;
+  // A 360 deg turn in place: no net forward wheel travel, but VO sees a little forward noise.
+  for (int k = 0; k < 50; ++k) slip.add(t += 0.2, 0.001, 0.02);
+  EXPECT_FALSE(slip.slip(t).has_value());
+  // Then clean driving: the turn must not show up as slip.
+  for (int k = 0; k < 8; ++k) slip.add(t += 0.2, 0.04, 0.04);
+  ASSERT_TRUE(slip.slip(t).has_value());
+  EXPECT_NEAR(*slip.slip(t), 0.0, 1e-9);
 }
 
 TEST(SlipEstimator, SlidingBackIsNotRollingFine)

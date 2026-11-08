@@ -96,6 +96,11 @@ void HeightMap::integrate(const std::vector<Eigen::Vector3f> & points)
   }
 }
 
+void HeightMap::clear()
+{
+  std::fill(elevation_.data.begin(), elevation_.data.end(), kUnknown);
+}
+
 void HeightMap::stampFootprint(const Eigen::Isometry3d & odom_from_base, double pivot_height, double radius)
 {
   const Eigen::Vector3d up = odom_from_base.linear().col(2);

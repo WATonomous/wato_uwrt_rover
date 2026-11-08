@@ -34,6 +34,9 @@ TEST(HeightMap, LatestObservationWins)
   map.integrate({{0.05f, 0.05f, 0.1f}});
   EXPECT_FLOAT_EQ(map.elevation().valueAt(0.05, 0.05, kUnknown), 0.1f);  // newer frame overwrites
   EXPECT_TRUE(std::isnan(map.elevation().valueAt(1.05, 0.05, 0.0f)));
+
+  map.clear();
+  EXPECT_TRUE(std::isnan(map.elevation().valueAt(0.05, 0.05, 0.0f)));
 }
 
 TEST(HeightMap, CropKeepsWorldCoordinates)

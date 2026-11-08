@@ -56,6 +56,9 @@ public:
   // Points in the odom frame from one depth frame.
   void integrate(const std::vector<Eigen::Vector3f> & points);
 
+  // Forget every observation.
+  void clear();
+
   // Mark never-observed cells within `radius` of the rover as the ground plane under it.
   // The rover is standing there, so that ground is traversable; this covers the blind
   // spot below the mast camera.

@@ -50,6 +50,7 @@
 #include "rover_core/planner.hpp"
 #include "rover_msgs/msg/enav_plan.hpp"
 #include "rover_msgs/msg/height_map.hpp"
+#include "rover_msgs/msg/mobility_status.hpp"
 
 using rover_core::Grid;
 using rover_core::Pose2;
@@ -182,6 +183,8 @@ public:
       });
     hazard_sub_ = create_subscription<geometry_msgs::msg::PointStamped>(
       "/mobility/hazard", 10, [this](geometry_msgs::msg::PointStamped::ConstSharedPtr m) { onHazard(*m); });
+    mobility_sub_ = create_subscription<rover_msgs::msg::MobilityStatus>(
+      "/mobility/status", 10, [this](rover_msgs::msg::MobilityStatus::ConstSharedPtr m) { onMobility(*m); });
 
     const double rate = declare_parameter("plan_rate", 2.0);
     timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<double>(1.0 / rate), [this]() { cycle(); });
@@ -232,6 +235,20 @@ private:
     height_map_.integrate(odom_points);
   }
 
+  // A panorama maps the terrain all around from scratch. After a "no safe path" fault the
+  // old map may hold false steps where terrain seen before an odometry error meets terrain
+  // seen after it, and those can block every path. The ground under the turning rover is the
+  // plane it stands on.
+  void onMobility(const rover_msgs::msg::MobilityStatus & msg)
+  {
+    const bool panorama = msg.mode == rover_msgs::msg::MobilityStatus::MODE_PANORAMA;
+    if (panorama && !panorama_) {
+      height_map_.clear();
+      RCLCPP_INFO(get_logger(), "Panorama: cleared the height map to map the terrain afresh");
+    }
+    panorama_ = panorama;
+  }
+
   void onHazard(const geometry_msgs::msg::PointStamped & msg)
   {
     if (!map_from_odom_) return;
@@ -255,9 +272,10 @@ private:
     const auto odom_tf = tf_buffer_.lookupTransform(odom_frame_, base_frame_, tf2::TimePointZero);
     const Pose2 rover = toPose2(odom_tf);
     map_from_odom_ = toPose2(tf_buffer_.lookupTransform(map_frame_, odom_frame_, tf2::TimePointZero));
-    // Only at startup, before the camera has seen anything: afterwards unseen ground near the
-    // rover (e.g. behind a rock) must stay unknown rather than be assumed flat.
-    if (!footprint_stamped_) {
+    // Only before the camera has seen anything (startup) and during a panorama, which starts
+    // from a cleared map: otherwise unseen ground near the rover (e.g. behind a rock) must
+    // stay unknown rather than be assumed flat.
+    if (!footprint_stamped_ || panorama_) {
       height_map_.stampFootprint(tf2::transformToEigen(odom_tf), rover_.pivotHeight(), footprint_radius_);
       footprint_stamped_ = true;
     }
@@ -560,6 +578,7 @@ private:
   std::optional<Pose2> map_from_odom_;
   bool has_previous_{false};
   bool footprint_stamped_{false};
+  bool panorama_{false};
   double previous_commit_yaw_{0.0};
   int cycles_{0};
 
@@ -575,6 +594,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr goal_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr hazard_sub_;
+  rclcpp::Subscription<rover_msgs::msg::MobilityStatus>::SharedPtr mobility_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
