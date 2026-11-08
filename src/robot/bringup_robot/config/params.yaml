@@ -91,3 +91,4 @@ global_localization:
     min_peak_ratio: 2.0
     peak_separation: 1.0
     tf_rate: 20.0
+    z_time_constant: 2.0  # s, how fast map -> odom height follows the DEM under the rover

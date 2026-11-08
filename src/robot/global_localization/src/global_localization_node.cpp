@@ -51,6 +51,7 @@ public:
   , odom_frame_(declare_parameter<std::string>("odom_frame", "odom"))
   , trigger_distance_(declare_parameter("trigger_distance", 8.0))
   , retry_period_(declare_parameter("retry_period", 5.0))
+  , pivot_height_(rover_core::loadRoverParams(rover_core::roverConfigPath()).pivotHeight())
   , tf_(this)
   {
     cfg_ = {
@@ -69,12 +70,11 @@ public:
     // Landing-site knowledge: the rover starts at the spawn point, with a deliberate error so
     // the first orbital match has something to correct. Odom axes are sun-aligned (east,
     // north), so map -> odom starts as a translation plus that small heading error.
-    const auto rover = rover_core::loadRoverParams(rover_core::roverConfigPath());
     const auto world = rover_core::loadWorldParams(rover_core::worldConfigPath());
     const auto offset = declare_parameter<std::vector<double>>("initial_offset", {0.7, -0.5, 0.0});
     if (offset.size() != 3) throw std::invalid_argument("initial_offset must be [dx, dy, dyaw]");
     map_from_odom_ = {world.spawn.x + offset[0], world.spawn.y + offset[1], offset[2]};
-    map_z_ = rover_core::bilinear(dem_, world.spawn.x, world.spawn.y) + rover.pivotHeight();
+    map_z_ = rover_core::bilinear(dem_, world.spawn.x, world.spawn.y) + pivot_height_;
 
     fix_pub_ = create_publisher<rover_msgs::msg::LocalizationFix>("/global_localization/fix", 10);
     odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
@@ -89,6 +89,7 @@ public:
         res->message = "matching on the next height map";
       });
     const double rate = declare_parameter("tf_rate", 20.0);
+    z_gain_ = 1.0 / (rate * declare_parameter("z_time_constant", 2.0));
     timer_ =
       rclcpp::create_timer(this, get_clock(), std::chrono::duration<double>(1.0 / rate), [this]() { publishTf(); });
   }
@@ -148,6 +149,16 @@ private:
 
   void publishTf()
   {
+    // Odometry height drifts (a fraction of a degree of pitch error adds up to metres over a
+    // traverse), and terrain matching ignores height. But the rover sits on the ground, so
+    // its height is the DEM's under its estimated position. Filtered, so DEM noise and rocks
+    // don't make the rover bob.
+    if (last_odom_) {
+      double x, y;
+      rover_core::transformPoint(map_from_odom_, last_odom_->x, last_odom_->y, x, y);
+      const double target = rover_core::bilinear(dem_, x, y) + pivot_height_ - last_odom_->z;
+      map_z_ += z_gain_ * (target - map_z_);
+    }
     geometry_msgs::msg::TransformStamped tf;
     tf.header.stamp = now();
     tf.header.frame_id = map_frame_;
@@ -169,7 +180,9 @@ private:
   const std::string odom_frame_;
   const double trigger_distance_;
   const double retry_period_;
+  const double pivot_height_;
   tf2_ros::TransformBroadcaster tf_;
+  double z_gain_;
   rover_core::MatchConfig cfg_;
   Pose2 map_from_odom_;
   double map_z_{0.0};

@@ -114,6 +114,7 @@ flowchart LR
   - Both are detrended (best-fit plane removed) and compared by normalized cross-correlation over ±2 m and ±3°.
   - A match must be distinct: `(1 − runner_up) ≥ 2 (1 − best)` for any peak 1 m or more away.
   - An accepted match replaces `map → odom`.
+- **Height**: matching ignores height, and odometry height drifts (about 1 % of distance from small pitch errors). Since the rover sits on the ground, `map → odom` height continuously follows the DEM under the estimated position (2 s time constant). Without it the rover model floats over, or sinks into, the terrain in Foxglove.
 
 ### ENav (`enav`, `rover_core`)
 
