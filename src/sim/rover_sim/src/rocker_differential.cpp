@@ -18,9 +18,9 @@
 // spring-damper on (theta_left + theta_right), applying the same torque to both rockers.
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 
-#include <ignition/common/Console.hh>
 #include <ignition/gazebo/components/JointForceCmd.hh>
 #include <ignition/gazebo/components/JointPosition.hh>
 #include <ignition/gazebo/components/JointVelocity.hh>
@@ -48,8 +48,7 @@ public:
     stiffness_ = sdf->Get<double>("stiffness");
     damping_ = sdf->Get<double>("damping");
     if (left_ == gz::kNullEntity || right_ == gz::kNullEntity) {
-      ignerr << "RockerDifferential: rocker joints not found" << std::endl;
-      return;
+      throw std::runtime_error("RockerDifferential: rocker joints not found");
     }
     for (auto joint : {left_, right_}) {
       ecm.CreateComponent(joint, gz::components::JointPosition());
@@ -60,7 +59,7 @@ public:
 
   void PreUpdate(const gz::UpdateInfo & info, gz::EntityComponentManager & ecm) override
   {
-    if (info.paused || left_ == gz::kNullEntity) return;
+    if (info.paused) return;
     const auto & pos_l = ecm.Component<gz::components::JointPosition>(left_)->Data();
     const auto & pos_r = ecm.Component<gz::components::JointPosition>(right_)->Data();
     const auto & vel_l = ecm.Component<gz::components::JointVelocity>(left_)->Data();

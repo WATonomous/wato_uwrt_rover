@@ -28,10 +28,11 @@ namespace
 
 constexpr double kMinStallCommand = 0.3;  // rad/s, below this a wheel is not really commanded
 
-std::string format(const char * fmt, double a, double b)
+template <typename... Args>
+std::string format(const char * fmt, Args... args)
 {
   char buf[128];
-  std::snprintf(buf, sizeof(buf), fmt, a, b);
+  std::snprintf(buf, sizeof(buf), fmt, args...);
   return buf;
 }
 
@@ -75,8 +76,8 @@ Fault FaultMonitor::update(const FaultInputs & in, const Checks & checks, std::s
   const bool over = rocker > limits_.rocker || bogie > limits_.bogie;
   suspension_time_ = checks.suspension && over ? suspension_time_ + in.dt : 0.0;
   if (suspension_time_ > limits_.persist_time) {
-    detail = format("rocker %.2f rad, bogie %.2f rad", rocker, bogie) +
-             format(" (limits %.2f, %.2f)", limits_.rocker, limits_.bogie);
+    detail =
+      format("rocker %.2f rad, bogie %.2f rad (limits %.2f, %.2f)", rocker, bogie, limits_.rocker, limits_.bogie);
     return Fault::kSuspension;
   }
   // Spinning in place (slip -> 1), sliding back (> 1) and sliding forward (< 0) all count.
@@ -89,7 +90,7 @@ Fault FaultMonitor::update(const FaultInputs & in, const Checks & checks, std::s
     const bool stalled = cmd > kMinStallCommand && std::abs(in.wheel_measured[k]) < limits_.stall_ratio * cmd;
     stall_time_[k] = stalled ? stall_time_[k] + in.dt : 0.0;
     if (stall_time_[k] > limits_.stall_time) {
-      detail = format("wheel %.0f stalled for %.1f s", static_cast<double>(k), stall_time_[k]);
+      detail = format("%s stalled for %.1f s", kWheelJoints[k].c_str(), stall_time_[k]);
       return Fault::kStall;
     }
   }

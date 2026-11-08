@@ -39,8 +39,7 @@ namespace
 
 Pose2 toPose2(const geometry_msgs::msg::Pose & p)
 {
-  const auto & q = p.orientation;
-  return {p.position.x, p.position.y, std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))};
+  return {p.position.x, p.position.y, rover_core::yawOf(p.orientation)};
 }
 
 }  // namespace
@@ -75,12 +74,8 @@ private:
     // Anchor odometry to the true pose once, so odom_position_error measures pure drift.
     if (!true_map_from_odom_) true_map_from_odom_ = rover_core::compose(*truth_, rover_core::inverse(*odom_));
 
-    const auto tf = tf_buffer_.lookupTransform("map", "odom", tf2::TimePointZero);
-    const auto & q = tf.transform.rotation;
-    const Pose2 map_from_odom{
-      tf.transform.translation.x,
-      tf.transform.translation.y,
-      std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))};
+    const auto tf = tf_buffer_.lookupTransform("map", "odom", tf2::TimePointZero).transform;
+    const Pose2 map_from_odom{tf.translation.x, tf.translation.y, rover_core::yawOf(tf.rotation)};
     const Pose2 estimate = rover_core::compose(map_from_odom, *odom_);
     const Pose2 odom_only = rover_core::compose(*true_map_from_odom_, *odom_);
 

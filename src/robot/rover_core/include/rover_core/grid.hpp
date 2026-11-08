@@ -37,6 +37,13 @@ inline double wrapAngle(double a)
   return std::atan2(std::sin(a), std::cos(a));
 }
 
+// Heading of any quaternion type with x, y, z, w members (ROS messages, tf2).
+template <typename Quaternion>
+double yawOf(const Quaternion & q)
+{
+  return std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+}
+
 // Apply `frame` (pose of a child frame in a parent frame) to a point in the child frame.
 inline void transformPoint(const Pose2 & frame, double x, double y, double & out_x, double & out_y)
 {

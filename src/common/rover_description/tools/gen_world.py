@@ -26,10 +26,21 @@ import json
 import math
 import os
 import struct
+from collections import namedtuple
 
 import numpy as np
 import yaml
 from PIL import Image
+
+SOIL_RGB = (0.62, 0.40, 0.26)
+SAND_RGB = (0.76, 0.57, 0.40)
+ROCK_RGB = (0.42, 0.34, 0.29)
+AMBIENT_RGB = (0.45, 0.38, 0.33)
+SUN_RGB = (1.0, 0.95, 0.88)
+
+# The renderer indexes mesh vertices with 16 bits, so every mesh file must stay under 65536
+# vertices; the terrain is split into tiles of TILE_QUADS x TILE_QUADS quads.
+TILE_QUADS = 100
 
 
 # --------------------------------------------------------------------------- terrain
@@ -414,20 +425,17 @@ def terrain_viz(cfg, xs, height, sand, normals, rock_verts, rock_faces):
     gx, gy = np.meshgrid(xs[keep], xs[keep])
     ground = np.stack([gx.ravel(), gy.ravel(), height[np.ix_(keep, keep)].ravel()], 1)
     ground_normals = normals.reshape(n, n, 3)[np.ix_(keep, keep)].reshape(-1, 3)
-    soil, sand_rgb, rock = (0.62, 0.40, 0.26), (0.76, 0.57, 0.40), (0.42, 0.34, 0.29)
-    albedo = np.where(sand[np.ix_(keep, keep)].reshape(-1, 1), sand_rgb, soil)
+    albedo = np.where(sand[np.ix_(keep, keep)].reshape(-1, 1), SAND_RGB, SOIL_RGB)
     faces, _ = terrain_faces(m)
 
     positions = np.concatenate([ground, rock_verts])
     all_normals = np.concatenate(
         [ground_normals, vertex_normals(rock_verts, rock_faces)]
     )
-    albedo = np.concatenate([albedo, np.tile(rock, (len(rock_verts), 1))])
+    albedo = np.concatenate([albedo, np.tile(ROCK_RGB, (len(rock_verts), 1))])
     lambert = np.clip(all_normals @ sun_vector(cfg["sun"]), 0.0, None)[:, None]
     # Gazebo's ambient and sun colours, dimmed to the brightness of the navcam images.
-    light = 0.85 * (
-        np.array([0.45, 0.38, 0.33]) + np.array([1.0, 0.95, 0.88]) * lambert
-    )
+    light = 0.85 * (np.array(AMBIENT_RGB) + np.array(SUN_RGB) * lambert)
     grain = 1.0 + 0.06 * rng.standard_normal((len(positions), 1))
     return (
         positions,
@@ -456,11 +464,6 @@ def terrain_faces(n):
     tiles_per_row = (n - 2) // TILE_QUADS + 1
     tile = ((j // TILE_QUADS) * tiles_per_row + i // TILE_QUADS).ravel()
     return faces, np.repeat(tile, 2)
-
-
-# The renderer indexes mesh vertices with 16 bits, so every mesh file must stay under 65536
-# vertices; the terrain is split into tiles of TILE_QUADS x TILE_QUADS quads.
-TILE_QUADS = 100
 
 
 # --------------------------------------------------------------------------- textures
@@ -546,20 +549,42 @@ def navcam_mount(cam):
     return head_x, head_z, head_z - 0.035
 
 
+RoverLayout = namedtuple(
+    "RoverLayout", "half_track beam_y pivot_x bogie_x bogie_z wheel_z"
+)
+
+
+def rover_layout(rover):
+    """Joint and wheel positions in base_link, shared by the SDF and the URDF."""
+    rocker = rover["rocker"]
+    half_track = rover["track_width"] / 2.0
+    bogie_z = rocker["bogie_pivot"][1]
+    wheel_z = bogie_z - rover["bogie"]["drop"]
+    assert abs(wheel_z - rocker["front_wheel"][1]) < 1e-9, (
+        "front wheel and bogie wheels must share a height"
+    )
+    return RoverLayout(
+        half_track=half_track,
+        beam_y=half_track
+        - rover["wheel"]["width"] / 2.0
+        - 0.04,  # just inside the wheels
+        pivot_x=rocker["pivot_x"],
+        bogie_x=rocker["pivot_x"] + rocker["bogie_pivot"][0],
+        bogie_z=bogie_z,
+        wheel_z=wheel_z,
+    )
+
+
+def rgba(rgb):
+    return " ".join(str(c) for c in rgb) + " 1"
+
+
 def rover_sdf(rover):
     """Rocker-bogie rover. Every link origin sits on its parent joint, so joint poses are zero."""
     wheel = rover["wheel"]
     radius, width = wheel["radius"], wheel["width"]
-    half_track = rover["track_width"] / 2.0
-    beam_y = half_track - width / 2.0 - 0.04
     rocker, bogie, body = rover["rocker"], rover["bogie"], rover["body"]
-    pivot_x = rocker["pivot_x"]
-    bogie_x = pivot_x + rocker["bogie_pivot"][0]
-    bogie_z = rocker["bogie_pivot"][1]
-    wheel_z = bogie_z - bogie["drop"]
-    assert abs(wheel_z - rocker["front_wheel"][1]) < 1e-9, (
-        "front wheel and bogie wheels must share a height"
-    )
+    half_track, beam_y, pivot_x, bogie_x, bogie_z, wheel_z = rover_layout(rover)
     wheels = {
         "front": (pivot_x + rocker["front_wheel"][0], "rocker"),
         "middle": (bogie_x + bogie["half_length"], "bogie"),
@@ -731,12 +756,7 @@ def rover_urdf(rover):
         rover["navcam"],
     )
     radius, width = wheel["radius"], wheel["width"]
-    half_track = rover["track_width"] / 2.0
-    beam_y = half_track - width / 2.0 - 0.04
-    pivot_x = rocker["pivot_x"]
-    bogie_x = pivot_x + rocker["bogie_pivot"][0]
-    bogie_z = rocker["bogie_pivot"][1]
-    wheel_z = bogie_z - bogie["drop"]
+    half_track, beam_y, pivot_x, bogie_x, bogie_z, wheel_z = rover_layout(rover)
     head_x, head_z, mast_top = navcam_mount(cam)
 
     def visual(xyz, rpy, geometry, material):
@@ -922,14 +942,14 @@ def world_sdf(cfg, spawn_z):
       <topic>/sim_clock</topic>
     </plugin>
     <scene>
-      <ambient>0.45 0.38 0.33 1</ambient>
+      <ambient>{rgba(AMBIENT_RGB)}</ambient>
       <background>0.78 0.6 0.45 1</background>
       <shadows>{shadows}</shadows>
     </scene>
     <light type='directional' name='sun'>
       <cast_shadows>{shadows}</cast_shadows>
       <pose>0 0 30 0 0 0</pose>
-      <diffuse>1.0 0.95 0.88 1</diffuse>
+      <diffuse>{rgba(SUN_RGB)}</diffuse>
       <specular>0.1 0.1 0.1 1</specular>
       <direction>{-to_sun[0]:.5f} {-to_sun[1]:.5f} {-to_sun[2]:.5f}</direction>
     </light>
@@ -1060,15 +1080,15 @@ def main():
     )
     surfaces.append(("rocks", "rock"))
 
-    make_texture(rng, tex["soil_px"], (0.62, 0.40, 0.26), 0.30, 1.4, 6000, 5, 0.0).save(
+    make_texture(rng, tex["soil_px"], SOIL_RGB, 0.30, 1.4, 6000, 5, 0.0).save(
         os.path.join(mesh_dir, "terrain.jpg"), quality=90
     )
     # Sand stays lighter and smoother than soil, but with ripples and grains a few
     # centimetres across so visual odometry (and so slip detection) still works on it.
-    make_texture(
-        rng, tex["sand_px"], (0.76, 0.57, 0.40), 0.14, 1.5, 1500, 6, 0.06
-    ).save(os.path.join(mesh_dir, "sand.jpg"), quality=90)
-    make_texture(rng, tex["rock_px"], (0.42, 0.34, 0.29), 0.28, 1.2, 400, 2, 0.0).save(
+    make_texture(rng, tex["sand_px"], SAND_RGB, 0.14, 1.5, 1500, 6, 0.06).save(
+        os.path.join(mesh_dir, "sand.jpg"), quality=90
+    )
+    make_texture(rng, tex["rock_px"], ROCK_RGB, 0.28, 1.2, 400, 2, 0.0).save(
         os.path.join(mesh_dir, "rocks.jpg"), quality=90
     )
     with open(os.path.join(terrain_dir, "model.sdf"), "w") as f:

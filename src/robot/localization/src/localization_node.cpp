@@ -44,17 +44,10 @@ namespace
 {
 
 using rover_core::AttitudeFilter;
+using rover_core::kWheelJoints;
 
 constexpr double kWheelMotionEpsilon = 1e-4;  // rad between joint_states messages
 constexpr double kStationaryTime = 0.3;  // s without wheel motion before VO is ignored
-
-const std::array<std::string, 6> kWheelJoints = {
-  "wheel_front_left_joint",
-  "wheel_middle_left_joint",
-  "wheel_rear_left_joint",
-  "wheel_front_right_joint",
-  "wheel_middle_right_joint",
-  "wheel_rear_right_joint"};
 
 Eigen::Vector3d toEigen(const geometry_msgs::msg::Vector3 & v)
 {

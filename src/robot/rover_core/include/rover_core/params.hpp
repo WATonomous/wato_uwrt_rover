@@ -23,6 +23,15 @@
 namespace rover_core
 {
 
+// Left side front to rear, then the right side: the order of every per-wheel array.
+inline const std::array<std::string, 6> kWheelJoints = {
+  "wheel_front_left_joint",
+  "wheel_middle_left_joint",
+  "wheel_rear_left_joint",
+  "wheel_front_right_joint",
+  "wheel_middle_right_joint",
+  "wheel_rear_right_joint"};
+
 // Rover geometry and limits, loaded from rover_description/config/rover.yaml.
 struct RoverParams
 {

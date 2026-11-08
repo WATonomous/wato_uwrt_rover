@@ -57,13 +57,8 @@ using rover_msgs::msg::MobilityStatus;
 namespace
 {
 
-const std::array<std::string, 6> kWheelJoints = {
-  "wheel_front_left_joint",
-  "wheel_middle_left_joint",
-  "wheel_rear_left_joint",
-  "wheel_front_right_joint",
-  "wheel_middle_right_joint",
-  "wheel_rear_right_joint"};
+const std::array<std::string, 4> kSuspensionJoints = {
+  "rocker_left_joint", "rocker_right_joint", "bogie_left_joint", "bogie_right_joint"};
 constexpr double kRecoveryReset = 30.0;  // s of fault-free driving that restores the recovery budget
 constexpr double kTrailSpacing = 0.05;  // m between recorded trail points
 constexpr size_t kTrailLength = 200;  // points kept (10 m)
@@ -72,6 +67,7 @@ constexpr double kBackoutDone = 0.1;  // m from the end of the retraced trail
 constexpr size_t kBackoutLookahead = 8;  // trail points (0.4 m) ahead of the closest one
 constexpr double kBackoutProgress = 0.05;  // m closer to the end that counts as progress
 constexpr double kBackoutNoProgress = 10.0;  // s without progress before giving up
+constexpr double kSlipMaxAge = 2.0;  // s before a slip estimate is too old to act on
 
 enum class Backout
 {
@@ -79,9 +75,6 @@ enum class Backout
   kDone,
   kStuck,
 };
-
-const std::array<std::string, 4> kSuspensionJoints = {
-  "rocker_left_joint", "rocker_right_joint", "bogie_left_joint", "bogie_right_joint"};
 
 enum class Mode : uint8_t
 {
@@ -91,6 +84,23 @@ enum class Mode : uint8_t
   kFault = MobilityStatus::MODE_FAULT,
   kRecovering = MobilityStatus::MODE_RECOVERING,
 };
+
+const char * toString(Mode mode)
+{
+  switch (mode) {
+    case Mode::kIdle:
+      return "IDLE";
+    case Mode::kPanorama:
+      return "PANORAMA";
+    case Mode::kDriving:
+      return "DRIVING";
+    case Mode::kFault:
+      return "FAULT";
+    case Mode::kRecovering:
+      return "RECOVERING";
+  }
+  throw std::invalid_argument("unknown Mode");
+}
 
 struct Pose
 {
@@ -107,14 +117,9 @@ Pose toPose(const nav_msgs::msg::Odometry & odom)
   return {
     odom.pose.pose.position.x,
     odom.pose.pose.position.y,
-    std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)),
+    rover_core::yawOf(q),
     std::atan2(2.0 * (q.w * q.x + q.y * q.z), 1.0 - 2.0 * (q.x * q.x + q.y * q.y)),
     std::asin(std::clamp(2.0 * (q.w * q.y - q.z * q.x), -1.0, 1.0))};
-}
-
-double yawOf(const geometry_msgs::msg::Quaternion & q)
-{
-  return std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
 }
 
 }  // namespace
@@ -136,6 +141,7 @@ public:
   , backout_distance_(declare_parameter("backout_distance", 1.0))
   , backout_speed_(declare_parameter("backout_speed", 0.15))
   , hazard_ahead_(declare_parameter("hazard_ahead", 0.6))
+  , dt_(1.0 / declare_parameter("control_rate", 20.0))
   , mode_(declare_parameter("startup_panorama", true) ? Mode::kPanorama : Mode::kIdle)
   {
     cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
@@ -164,8 +170,6 @@ public:
         res->message = res->success ? "panorama started" : "rover is busy";
         if (res->success) setMode(Mode::kPanorama, Fault::kNone, "");
       });
-    const double rate = declare_parameter("control_rate", 20.0);
-    dt_ = 1.0 / rate;
     timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<double>(dt_), [this]() { tick(); });
   }
 
@@ -354,7 +358,7 @@ private:
     const auto & poses = plan_->path.poses;
 
     // Turn in place to the path heading first (skid steer).
-    const double heading_error = rover_core::wrapAngle(yawOf(poses.front().pose.orientation) - pose.yaw);
+    const double heading_error = rover_core::wrapAngle(rover_core::yawOf(poses.front().pose.orientation) - pose.yaw);
     if (std::abs(heading_error) > turn_start_) turning_ = true;
     if (turning_) {
       if (std::abs(heading_error) < turn_done_) {
@@ -402,10 +406,12 @@ private:
     in.rocker = {j.position[find(kSuspensionJoints[0])], j.position[find(kSuspensionJoints[1])]};
     in.bogie = {j.position[find(kSuspensionJoints[2])], j.position[find(kSuspensionJoints[3])]};
     for (size_t k = 0; k < 6; ++k) {
-      in.wheel_measured[k] = j.velocity[find(kWheelJoints[k])];
+      in.wheel_measured[k] = j.velocity[find(rover_core::kWheelJoints[k])];
       in.wheel_command[k] = wheel_command_[k];
     }
-    if (slip_ && slip_->valid && now() - rclcpp::Time(slip_->header.stamp) < rclcpp::Duration::from_seconds(2.0)) {
+    if (
+      slip_ && slip_->valid && now() - rclcpp::Time(slip_->header.stamp) < rclcpp::Duration::from_seconds(kSlipMaxAge))
+    {
       in.slip = slip_->slip;
     }
     return in;
@@ -437,15 +443,16 @@ private:
     geometry_msgs::msg::PointStamped hazard;
     hazard.header.stamp = now();
     hazard.header.frame_id = odom_->header.frame_id;
-    hazard.point.x = fault_pose_[0] + hazard_ahead_ * std::cos(fault_pose_[2]);
-    hazard.point.y = fault_pose_[1] + hazard_ahead_ * std::sin(fault_pose_[2]);
+    hazard.point.x = fault_pose_.x + hazard_ahead_ * std::cos(fault_pose_.yaw);
+    hazard.point.y = fault_pose_.y + hazard_ahead_ * std::sin(fault_pose_.yaw);
     hazard_pub_->publish(hazard);
   }
 
   void setMode(Mode mode, Fault fault, const std::string & detail)
   {
-    if (mode != mode_ && !detail.empty())
-      RCLCPP_INFO(get_logger(), "mobility -> %d: %s", static_cast<int>(mode), detail.c_str());
+    if (mode != mode_ && mode != Mode::kFault && !detail.empty()) {
+      RCLCPP_INFO(get_logger(), "%s: %s", toString(mode), detail.c_str());
+    }
     if (mode == Mode::kPanorama) {
       panorama_turned_ = 0.0;
       panorama_last_yaw_.reset();
@@ -480,13 +487,13 @@ private:
   const double backout_distance_;
   const double backout_speed_;
   const double hazard_ahead_;
-  double dt_{0.05};
+  const double dt_;
 
   Mode mode_;
   Fault fault_{Fault::kNone};
   std::string detail_;
   rclcpp::Time fault_time_{0, 0, RCL_ROS_TIME};
-  std::array<double, 3> fault_pose_{};
+  rover_core::Pose2 fault_pose_;
   std::deque<std::array<double, 2>> trail_;
   std::vector<std::array<double, 2>> backout_path_;
   double backout_length_{0.0};

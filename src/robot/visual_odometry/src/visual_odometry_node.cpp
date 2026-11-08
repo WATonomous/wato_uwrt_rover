@@ -40,6 +40,13 @@
 
 using sensor_msgs::msg::Image;
 
+namespace
+{
+
+constexpr double kMaxRotation = 0.5;  // rad between frames; more is a bad match
+
+}  // namespace
+
 class VisualOdometryNode : public rclcpp::Node
 {
 public:
@@ -53,13 +60,13 @@ public:
   , max_step_(declare_parameter("max_step", 0.5))
   , orb_(cv::ORB::create(
       declare_parameter("features", 600),
-      1.2f,
-      6,
-      15,
-      0,
-      2,
+      /*scaleFactor=*/1.2f,
+      /*nlevels=*/6,
+      /*edgeThreshold=*/15,
+      /*firstLevel=*/0,
+      /*WTA_K=*/2,
       cv::ORB::HARRIS_SCORE,
-      15,
+      /*patchSize=*/15,
       declare_parameter("fast_threshold", 8)))
   , matcher_(cv::NORM_HAMMING)
   {
@@ -130,7 +137,7 @@ private:
       const Eigen::Vector3d t = motion->body_motion.translation();
       const Eigen::Quaterniond q(motion->body_motion.linear());
       msg.inliers = static_cast<uint32_t>(motion->inliers);
-      msg.valid = t.norm() < max_step_ && Eigen::AngleAxisd(q).angle() < 0.5;
+      msg.valid = t.norm() < max_step_ && Eigen::AngleAxisd(q).angle() < kMaxRotation;
       msg.delta.position.x = t.x();
       msg.delta.position.y = t.y();
       msg.delta.position.z = t.z();

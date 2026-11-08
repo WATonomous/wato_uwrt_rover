@@ -35,8 +35,9 @@ enav:
     recenter_margin: 3.0
     depth_stride: 1
     max_range: 7.0
-    # At startup only: ground within this radius (under the rover and the camera's blind spot,
-    # ~0.95 m) is assumed flat. Afterwards the rover only drives onto ground it has seen.
+    # During a look-around only (startup, recovery): ground within this radius (under the rover
+    # and the camera's blind spot, ~0.95 m) is assumed flat. Otherwise the rover only drives onto
+    # ground it has seen.
     footprint_radius: 1.2
     plan_rate: 2.0
     goal_tolerance: 1.0

@@ -50,14 +50,14 @@ SCENARIO=manual ./watod up
 
 | What you see | Meaning |
 | --- | --- |
-| Mars surface (`/sim/terrain`) | The simulator's true ground, rocks and sand, lit by the same sun as the navcam. It is for you, not the rover: the rover only knows what its camera and the orbital map show it, so any gap between the rover model and the surface is localization error. Published once (about 3.5 MB), so it adds no ongoing load |
-| The rover model (body, mast, rockers, bogies, six wheels) | Drawn from its URDF with live joint angles, so you can watch the suspension articulate. The label above it says which goal it is on and how far away it is |
-| Magenta pillar "GOAL n" | The waypoint it is driving to. Orange: upcoming waypoints. Grey: reached |
-| Cyan line | The global route: cheapest path to the goal on the cost-to-go grid |
-| Thick green line | The candidate path ENav chose this cycle; the rover drives its first arc |
-| Thin red lines | Candidates ACE checked and rejected (too steep, too rough, or not enough clearance) |
-| Grey squares (dark = low, light = high), off by default | The rover's height map from the navcam (`/enav/height_cloud`) |
-| Faint coloured overlay at map height 0, off by default | Route cost: slopes, observed rocks, keep-out zones (`/enav/cost`) |
+| Mars surface (`/sim/terrain`) | The simulator's true ground, rocks and sand, lit by the same sun as the navcam. It is for you, not the rover: the rover only knows what its camera and the orbital map show it, so any gap between the rover model and the surface is localization error. Published once (about 3.7 MB), so it adds no ongoing load. |
+| The rover model (body, mast, rockers, bogies, six wheels) | Drawn from its URDF with live joint angles, so you can watch the suspension articulate. The label above it says which goal it is on and how far away it is. |
+| Magenta pillar "GOAL n" | The waypoint it is driving to. Orange: upcoming waypoints. Grey: reached. |
+| Cyan line | The global route: cheapest path to the goal on the cost-to-go grid. |
+| Thick green line | The candidate path ENav chose this cycle; the rover drives its first arc. |
+| Thin red lines | Candidates ACE checked and rejected (too steep, too rough, or not enough clearance). |
+| Grey squares (dark = low, light = high), off by default | The rover's height map from the navcam (`/enav/height_cloud`). |
+| Faint coloured overlay at map height 0, off by default | Route cost: slopes, observed rocks, keep-out zones (`/enav/cost`). |
 
 Turn layers on and off with the eye icons under *Topics* in the 3D panel's settings. The height map and the cost overlay are what the rover itself perceives; the terrain is what is really there.
 
@@ -108,7 +108,7 @@ flowchart LR
 - **Position**:
   - Wheel odometry is integrated as it arrives.
   - When a visual odometry frame covers an interval, its translation replaces the wheel motion over that interval, as Perseverance does.
-  - Only the translation within the rover's deck plane is used: the rover cannot rise through its own chassis. VO's out-of-plane component was biased (+1.4 % of distance in simulation), and that false climb left false steps in ENav's height map.
+  - Only VO's translation within the rover's deck plane is used: the rover cannot rise through its own chassis, and the out-of-plane component is biased (+1.4 % of distance in simulation).
   - With all wheels still, VO is ignored (zero-velocity update).
 - **Slip**: `1 − VO forward distance / wheel forward distance` over the last 0.6 m driven, signed. 0 is clean rolling, 1 is wheels spinning in place, above 1 is sliding back while the wheels drive forward.
 - **Global fixes**: every 8 m, the local height map is matched against the orbital DEM.
@@ -136,7 +136,7 @@ Each cycle (2 Hz), while the rover is still driving the previous arc:
    - For each wheel, the max-filtered height map gives an interval for the ground under it.
    - The intervals are pushed through the rocker-bogie linkage in closed form to bound pitch, roll, rocker and bogie angles and belly clearance.
    - Worst cases are compared against the limits in `rover.yaml`.
-   - Unseen terrain is unknown, never assumed flat, except under the rover at startup.
+   - Unseen terrain is unknown, never assumed flat, except under the rover during a look-around (at startup, and when recovering).
 5. **Mobility** turns in place to the chosen heading, then follows the first arc with pure pursuit.
 
 ### Fault protection (`mobility`)
@@ -149,7 +149,12 @@ Each cycle (2 Hz), while the rover is still driving the previous arc:
 | Stall | commanded wheel turning, measured wheel not, for 2 s |
 | No safe path | ENav found no safe path for 10 cycles in a row |
 
-On a fault the rover stops. With `auto_recover` it retraces its own trail backwards for up to 1 m (ground it has just driven over, so no blind turns). For slip, suspension and stall faults it also reports a 1.5 m keep-out zone to ENav. After backing out of a *no safe path* fault it also looks around: a 360° turn in place, during which ENav throws away its height map and maps the terrain afresh. Odometry errors (such as a slip) can leave false steps where terrain seen before the error meets terrain seen after it, and those can block every path; a fresh map has none. The turn is not checked by ACE, but it happens on the rover's own trail and fault protection stays on. The same panorama runs at startup on the landing pad. After `max_recoveries` attempts it waits for the ground. 30 s of fault-free driving restores the budget.
+On a fault the rover stops. With `auto_recover` it recovers by itself:
+
+- It retraces its own trail backwards for up to 1 m: ground it has just driven over, so no blind turns.
+- For slip, suspension and stall faults it reports a 1.5 m keep-out zone to ENav.
+- After a *no safe path* fault it then looks around: a 360° turn in place, during which ENav throws away its height map and maps the terrain afresh. An odometry error (such as a slip) can leave false steps where terrain seen before it meets terrain seen after it, and those can block every path; a fresh map has none. The turn is not checked by ACE, but it happens on the rover's own trail with fault protection on, like the startup look-around on the landing pad.
+- After `max_recoveries` attempts it waits for the ground. 30 s of fault-free driving restores the budget.
 
 ## Measured results
 
@@ -190,7 +195,7 @@ Unit tests cover ACE (including a check that the bounds contain every exact conf
 
 ## Simulation notes
 
-- Performance on an M1 with Foxglove attached: the whole stack uses about 1.2 CPU cores (Gazebo ~100 %, robot nodes ~17 %, Foxglove bridge ~5 %) and runs at real time. What it took, biggest win first:
+- Performance on an M1 with Foxglove attached: the whole stack uses about 1.3 CPU cores (Gazebo ~100 %, robot nodes ~25 %, Foxglove bridge ~5 %) and runs at real time. What it took, biggest win first:
 
   | Change | Why |
   | --- | --- |

@@ -58,14 +58,43 @@ using rover_core::Pose2;
 namespace
 {
 
-constexpr int kMapPublishCycles = 4;  // height map + cloud every 4 planning cycles (0.5 Hz)
+constexpr int kMapPublishCycles = 4;  // maps for Foxglove every 4 planning cycles (0.5 Hz)
 constexpr int kCloudStride = 3;  // height-map cells between Foxglove cloud points
+constexpr size_t kMaxRejectedShown = 25;
+
+struct Rgba
+{
+  float r;
+  float g;
+  float b;
+  float a;
+};
+
+constexpr Rgba kWhite{1.0f, 1.0f, 1.0f, 1.0f};
+constexpr Rgba kRejected{1.0f, 0.15f, 0.15f, 0.9f};
+constexpr Rgba kChosen{0.2f, 1.0f, 0.3f, 0.9f};
+constexpr Rgba kRoute{0.1f, 0.85f, 1.0f, 0.9f};
+constexpr Rgba kWaypointDone{0.5f, 0.5f, 0.5f, 0.5f};
+constexpr Rgba kWaypointCurrent{1.0f, 0.2f, 0.9f, 0.9f};
+constexpr Rgba kWaypointUpcoming{1.0f, 0.6f, 0.1f, 0.9f};
 
 Pose2 toPose2(const geometry_msgs::msg::TransformStamped & tf)
 {
-  const auto & q = tf.transform.rotation;
-  const double yaw = std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
-  return {tf.transform.translation.x, tf.transform.translation.y, yaw};
+  return {tf.transform.translation.x, tf.transform.translation.y, rover_core::yawOf(tf.transform.rotation)};
+}
+
+visualization_msgs::msg::Marker marker(const std::string & frame, const std::string & ns, int type, const Rgba & c)
+{
+  visualization_msgs::msg::Marker m;
+  m.header.frame_id = frame;
+  m.ns = ns;
+  m.type = type;
+  m.color.r = c.r;
+  m.color.g = c.g;
+  m.color.b = c.b;
+  m.color.a = c.a;
+  m.pose.orientation.w = 1.0;
+  return m;
 }
 
 geometry_msgs::msg::Quaternion yawQuaternion(double yaw)
@@ -142,11 +171,10 @@ public:
     tree_ = rover_core::buildPathTree(tree);
 
     dem_ = rover_core::loadOrbitalMap(rover_core::orbitalMapPath());
-    const Grid<float> & dem = dem_;
-    orbital_cost_ = rover_core::orbitalCost(dem, cost_);
+    orbital_cost_ = rover_core::orbitalCost(dem_, cost_);
     observed_cost_ =
-      Grid<float>(dem.resolution, dem.origin_x, dem.origin_y, dem.width, dem.height, rover_core::kUnknown);
-    keep_out_ = Grid<float>(dem.resolution, dem.origin_x, dem.origin_y, dem.width, dem.height, 0.0f);
+      Grid<float>(dem_.resolution, dem_.origin_x, dem_.origin_y, dem_.width, dem_.height, rover_core::kUnknown);
+    keep_out_ = Grid<float>(dem_.resolution, dem_.origin_x, dem_.origin_y, dem_.width, dem_.height, 0.0f);
     const auto keep_out = declare_parameter<std::vector<double>>("keep_out", std::vector<double>{});
     if (keep_out.size() % 3 != 0) throw std::invalid_argument("keep_out must be [x, y, radius, ...]");
     for (size_t k = 0; k < keep_out.size(); k += 3) {
@@ -332,37 +360,39 @@ private:
       has_previous_ = true;
     } else {
       msg.status = rover_msgs::msg::EnavPlan::STATUS_NO_SAFE_PATH;
-      const auto & r = result.rejections;
+      std::string reasons;
+      for (size_t k = 0; k < result.rejections.size(); ++k) {
+        if (result.rejections[k] == 0) continue;
+        reasons += std::string(" ") + rover_core::toString(static_cast<rover_core::AceResult>(k)) + "=" +
+                   std::to_string(result.rejections[k]);
+      }
       RCLCPP_WARN_THROTTLE(
         get_logger(),
         *get_clock(),
         5000,
-        "No safe path: %d candidates, ACE rejected %zu (unknown %d, tilt %d, rocker %d, bogie %d, clearance %d)",
+        "No safe path: %d candidates, ACE rejected %zu:%s",
         result.candidates,
         result.ace_rejected.size(),
-        r[1],
-        r[2],
-        r[3],
-        r[4],
-        r[5]);
+        reasons.c_str());
     }
-    RCLCPP_DEBUG(
-      get_logger(), "plan %.1f ms, %d candidates, %d ACE evaluations", ms, result.candidates, result.ace_evaluations);
     plan_pub_->publish(msg);
     publishCandidates(result, rover, odom_tf.transform.translation.z - rover_.pivotHeight() + 0.1);
     publishMission(rover_map, rover_core::routeToGoal(ctg, rover_map.x, rover_map.y));
-    if (cycles_ % 4 == 0) {
-      double max_ctg = 1.0;
-      for (float v : ctg.data) {
-        if (std::isfinite(v)) max_ctg = std::max(max_ctg, static_cast<double>(v));
-      }
-      auto grid = toOccupancy(cost, 1.0, map_frame_);
-      grid.header.stamp = msg.header.stamp;
-      cost_pub_->publish(grid);
-      grid = toOccupancy(ctg, max_ctg, map_frame_);
-      grid.header.stamp = msg.header.stamp;
-      ctg_pub_->publish(grid);
+    if (cycles_ % kMapPublishCycles == 0) publishCosts(cost, ctg, msg.header.stamp);
+  }
+
+  void publishCosts(const Grid<float> & cost, const Grid<float> & ctg, const builtin_interfaces::msg::Time & stamp)
+  {
+    double max_ctg = 1.0;
+    for (float v : ctg.data) {
+      if (std::isfinite(v)) max_ctg = std::max(max_ctg, static_cast<double>(v));
     }
+    auto grid = toOccupancy(cost, 1.0, map_frame_);
+    grid.header.stamp = stamp;
+    cost_pub_->publish(grid);
+    grid = toOccupancy(ctg, max_ctg, map_frame_);
+    grid.header.stamp = stamp;
+    ctg_pub_->publish(grid);
   }
 
   void publishMaps()
@@ -423,19 +453,11 @@ private:
     visualization_msgs::msg::Marker clear;
     clear.action = visualization_msgs::msg::Marker::DELETEALL;
     markers.markers.push_back(clear);
-    auto add = [&](int index, float r, float g, float b, float width) {
-      visualization_msgs::msg::Marker m;
-      m.header.frame_id = odom_frame_;
+    auto add = [&](int index, const Rgba & color, double width) {
+      auto m = marker(odom_frame_, "candidates", visualization_msgs::msg::Marker::LINE_STRIP, color);
       m.header.stamp = now();
-      m.ns = "candidates";
       m.id = static_cast<int>(markers.markers.size());
-      m.type = visualization_msgs::msg::Marker::LINE_STRIP;
       m.scale.x = width;
-      m.color.r = r;
-      m.color.g = g;
-      m.color.b = b;
-      m.color.a = 0.9f;
-      m.pose.orientation.w = 1.0;
       for (const auto & p : rover_core::toOdom(tree_[index], rover)) {
         geometry_msgs::msg::Point pt;
         pt.x = p.x;
@@ -446,10 +468,10 @@ private:
       markers.markers.push_back(m);
     };
     // Red: paths ACE checked and rejected this cycle. Green: the path being driven.
-    for (size_t k = 0; k < std::min<size_t>(25, result.ace_rejected.size()); ++k) {
-      add(result.ace_rejected[k], 1.0f, 0.15f, 0.15f, 0.025f);
+    for (size_t k = 0; k < std::min(kMaxRejectedShown, result.ace_rejected.size()); ++k) {
+      add(result.ace_rejected[k], kRejected, 0.025);
     }
-    if (result.found) add(result.index, 0.2f, 1.0f, 0.3f, 0.08f);
+    if (result.found) add(result.index, kChosen, 0.08);
     marker_pub_->publish(markers);
   }
 
@@ -461,70 +483,48 @@ private:
     visualization_msgs::msg::Marker clear;
     clear.action = visualization_msgs::msg::Marker::DELETEALL;
     markers.markers.push_back(clear);
-    auto marker = [&](const std::string & frame, int type, float r, float g, float b, float a) {
-      visualization_msgs::msg::Marker m;
-      m.header.frame_id = frame;
+    auto add = [&](visualization_msgs::msg::Marker m) {
       m.header.stamp = now();
-      m.ns = "mission";
       m.id = static_cast<int>(markers.markers.size());
-      m.type = type;
-      m.color.r = r;
-      m.color.g = g;
-      m.color.b = b;
-      m.color.a = a;
-      m.pose.orientation.w = 1.0;
-      return m;
+      markers.markers.push_back(m);
     };
-    auto ground = [&](double x, double y) {
-      const float z = rover_core::bilinear(dem_, x, y);
-      return std::isnan(z) ? 0.0 : static_cast<double>(z);
-    };
+    using visualization_msgs::msg::Marker;
 
     for (size_t k = 0; k < waypoints_.size(); ++k) {
       const bool current = k == next_;
-      const bool done = k < next_;
-      auto pillar = marker(
-        map_frame_,
-        visualization_msgs::msg::Marker::CYLINDER,
-        done ? 0.5f : 1.0f,
-        done      ? 0.5f
-        : current ? 0.2f
-                  : 0.6f,
-        done      ? 0.5f
-        : current ? 0.9f
-                  : 0.1f,
-        done ? 0.5f : 0.9f);
+      const Rgba & color = k < next_ ? kWaypointDone : current ? kWaypointCurrent : kWaypointUpcoming;
       const double height = current ? 2.0 : 1.2;
+      auto pillar = marker(map_frame_, "mission", Marker::CYLINDER, color);
       pillar.pose.position.x = waypoints_[k].x;
       pillar.pose.position.y = waypoints_[k].y;
-      pillar.pose.position.z = ground(waypoints_[k].x, waypoints_[k].y) + height / 2.0;
+      pillar.pose.position.z = rover_core::bilinear(dem_, waypoints_[k].x, waypoints_[k].y) + height / 2.0;
       pillar.scale.x = pillar.scale.y = current ? 0.4 : 0.25;
       pillar.scale.z = height;
-      markers.markers.push_back(pillar);
+      add(pillar);
 
-      auto label = marker(map_frame_, visualization_msgs::msg::Marker::TEXT_VIEW_FACING, 1.0f, 1.0f, 1.0f, 1.0f);
+      auto label = marker(map_frame_, "mission", Marker::TEXT_VIEW_FACING, kWhite);
       label.pose.position = pillar.pose.position;
       label.pose.position.z += height / 2.0 + 0.4;
       label.scale.z = current ? 0.6 : 0.4;
       label.text = (current ? "GOAL " : "") + std::to_string(k + 1);
-      markers.markers.push_back(label);
+      add(label);
     }
 
     if (!route.empty()) {
-      auto line = marker(map_frame_, visualization_msgs::msg::Marker::LINE_STRIP, 0.1f, 0.85f, 1.0f, 0.9f);
+      auto line = marker(map_frame_, "mission", Marker::LINE_STRIP, kRoute);
       line.scale.x = 0.08;
       for (const auto & p : route) {
         geometry_msgs::msg::Point pt;
         pt.x = p.x;
         pt.y = p.y;
-        pt.z = ground(p.x, p.y) + 0.15;
+        pt.z = rover_core::bilinear(dem_, p.x, p.y) + 0.15;
         line.points.push_back(pt);
       }
-      markers.markers.push_back(line);
+      add(line);
     }
 
     // The rover itself is drawn from its URDF (robot_state_publisher); this is its status label.
-    auto status = marker(base_frame_, visualization_msgs::msg::Marker::TEXT_VIEW_FACING, 1.0f, 1.0f, 1.0f, 1.0f);
+    auto status = marker(base_frame_, "mission", Marker::TEXT_VIEW_FACING, kWhite);
     status.frame_locked = true;
     status.pose.position.z = 1.4;
     status.scale.z = 0.35;
@@ -544,7 +544,7 @@ private:
         std::hypot(g.x - rover_map.x, g.y - rover_map.y));
       status.text = buf;
     }
-    markers.markers.push_back(status);
+    add(status);
     mission_pub_->publish(markers);
   }
 
