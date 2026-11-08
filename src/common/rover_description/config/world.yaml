@@ -41,6 +41,13 @@ dunes:
     sigma: 2.2
     height: 1.0  # max slope ~15 deg: well under the ACE tilt limit, above what sand friction allows
 
+# Rocky mounds across the traverse legs. Flanks reach ~40 deg, twice the ACE tilt limit,
+# so they cost a lot from orbit and ACE rejects them up close: the rover has to drive around.
+mounds:
+  - {x: -18.5, y: -4.0, radius: 3.5, height: 2.2}
+  - {x: 16.5, y: 12.0, radius: 4.0, height: 2.6}
+  - {x: 5.0, y: 22.5, radius: 2.6, height: 1.8}
+
 rocks:
   min_diameter: 0.15
   max_diameter: 1.4
@@ -50,6 +57,10 @@ rocks:
       y: -10.0
       radius: 5.0
       k: 0.14
+    # Rubble on the mounds
+    - {x: -18.5, y: -4.0, radius: 3.0, k: 0.08}
+    - {x: 16.5, y: 12.0, radius: 3.5, k: 0.08}
+    - {x: 5.0, y: 22.5, radius: 2.2, k: 0.08}
   boulders:
     - x: -14.0
       y: -15.0
@@ -57,6 +68,13 @@ rocks:
     - x: 12.0
       y: 14.0
       diameter: 1.2
+    # Boulders 2-3 m across (over 1 m tall), far too big to straddle. Each group is a
+    # ~7 m wall across a traverse leg.
+    - {x: -8.0, y: 16.0, diameter: 2.6}
+    - {x: -9.4, y: 17.9, diameter: 2.0}
+    - {x: -6.6, y: 14.2, diameter: 2.2}
+    - {x: 7.0, y: -17.0, diameter: 2.8}
+    - {x: 6.0, y: -14.7, diameter: 2.0}
 
 spawn:
   x: -22.0

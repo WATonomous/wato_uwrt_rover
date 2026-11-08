@@ -41,7 +41,7 @@ SCENARIO=manual ./watod up
 
 | Scenario | What it shows |
 | --- | --- |
-| `traverse` | ~120 m loop over six waypoints: route planning around craters, odometry drift and orbital fixes. The dune is a ground-planned keep-out zone. |
+| `traverse` | ~140 m loop over six waypoints: route planning around craters, rocky mounds and boulder walls that sit across the legs, odometry drift and orbital fixes. The dune is a ground-planned keep-out zone. |
 | `manual` | No waypoints: after its startup panorama the rover waits for you to click a goal. |
 | `rock_field` | Straight into a dense rock field: ACE threads between rocks it cannot straddle. |
 | `sand_trap` | A goal on the sandy flank of a dune (~14–15° there, which ACE accepts) with no keep-out zone. The sand is meant to be too loose to climb, so slip detection should stop the rover, then it backs out and marks the hazard. See *Simulation notes*: in Gazebo the sand has not actually cost the rover traction so far. |
@@ -95,8 +95,8 @@ flowchart LR
 
 `tools/gen_world.py` builds everything from `config/world.yaml` and `config/rover.yaml` at build time:
 
-- **Terrain**: smooth spectral-noise plains, craters with rims, a sand dune, and a flattened landing pad. Meshes are split into tiles because the renderer uses 16-bit vertex indices.
-- **Rocks**: sizes drawn from the Golombek rock-abundance model used for Mars landing-site hazard analysis, with a dense rock field and a few boulders.
+- **Terrain**: smooth spectral-noise plains, craters with rims, a sand dune (sand covers the dune itself, with a ragged edge), three rocky mounds with ~40° flanks (twice the ACE tilt limit), and a flattened landing pad. Meshes are split into tiles because the renderer uses 16-bit vertex indices.
+- **Rocks**: sizes drawn from the Golombek rock-abundance model used for Mars landing-site hazard analysis, with a dense rock field, rubble on the mounds, and boulders up to 2.8 m across (over 1 m tall). Two groups of big boulders form ~7 m walls across traverse legs.
 - **Surfaces**: soil, sand and rock each have their own friction. Sand is set to 0.18, which should be lower than the dune's steepest slope (~15°) needs; that is the intended sand trap.
 - **Textures**: textured for visual odometry (Mars colors, pebbles, sand ripples), with Mars gravity and a sun that matches the sun sensor.
 - **Orbital DEM**: a 25 cm/px map of the same terrain, blurred and noisy like a HiRISE product. The rover's only global reference.
@@ -155,7 +155,7 @@ Simulation runs on an Apple M1 (Docker Desktop, software rendering). Errors are 
 
 | Scenario | Outcome |
 | --- | --- |
-| `traverse` | **All 6 waypoints reached** in ~6 min of sim time (133 m, moving 96 % of the driving time at ~0.39 m/s), no faults, at 0.99× real time with Foxglove attached. An earlier, slower run (14 min) had **one real slip fault** (61 %): it stopped, backed out and routed around. Final estimate error 0.20 m; odometry alone drifted 0.7 % of distance. Planning ~16 ms per cycle. |
+| `traverse` | **All 6 waypoints reached** in ~7.5 min (152 m) around the mounds and boulder walls. Two faults, both auto-recovered: a bogie spike on a rock, and no safe path on the crater rim next to waypoint 4. Final estimate error 0.08 m; odometry alone drifted 0.3 % of distance. Planning ~14 ms per cycle. Before the mounds and boulders, a 133 m run reached every waypoint with no faults. |
 | `rock_field` | Goal reached through the dense rock field, 32.4 m, no faults. Final estimate error 0.12 m, odometry alone 0.45 m (1.4 %). Run with `./watod up`. |
 | `sand_trap` | Both waypoints reached with no faults: the sand did not cost traction in Gazebo (see *Simulation notes*). |
 
@@ -182,7 +182,7 @@ Unit tests cover ACE (including a check that the bounds contain every exact conf
 | File | What to change there |
 | --- | --- |
 | `src/common/rover_description/config/rover.yaml` | Rover geometry, sensors, ACE and fault limits (used by both the sim and the stack) |
-| `src/common/rover_description/config/world.yaml` | Terrain, craters, dunes, rock abundance, sun, friction |
+| `src/common/rover_description/config/world.yaml` | Terrain, craters, dunes, mounds, rock abundance and boulders, sun, friction |
 | `src/robot/bringup_robot/config/params.yaml` | Node parameters |
 | `src/robot/bringup_robot/config/scenarios/*.yaml` | Waypoints, keep-out zones, auto-recovery |
 

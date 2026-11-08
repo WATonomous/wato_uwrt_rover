@@ -94,18 +94,24 @@ def build_heightfield(cfg, rng, xs):
         placed += 1
 
     sand = np.zeros_like(height, dtype=bool)
+    # Sand covers each dune out to a ragged edge where it thins out onto the soil.
+    sand_edge = spectral_noise(rng, n, 3.0, res / 1.5)
     for dune in cfg["dunes"]:
         yaw = math.radians(dune["yaw_deg"])
         along = (gx - dune["x"]) * math.cos(yaw) + (gy - dune["y"]) * math.sin(yaw)
         across = -(gx - dune["x"]) * math.sin(yaw) + (gy - dune["y"]) * math.cos(yaw)
         half_length = dune["length"] / 2.0
         taper = np.exp(-((along / half_length) ** 4))
-        height += (
-            dune["height"] * np.exp(-(across**2) / (2.0 * dune["sigma"] ** 2)) * taper
-        )
-        sand |= (np.abs(across) < 2.5 * dune["sigma"]) & (
-            np.abs(along) < half_length * 1.1
-        )
+        bump = np.exp(-(across**2) / (2.0 * dune["sigma"] ** 2)) * taper
+        height += dune["height"] * bump
+        sand |= bump * (1.0 + 0.4 * sand_edge) > 0.12
+
+    # Lumpy mounds with flanks far steeper than ACE accepts: the rover has to go around.
+    lumps = spectral_noise(rng, n, 3.0, res / 1.5)
+    for mound in cfg["mounds"]:
+        s = np.hypot(gx - mound["x"], gy - mound["y"]) / mound["radius"]
+        dome = np.clip(1.0 - s**2, 0.0, None) ** 2
+        height += mound["height"] * dome * (1.0 + 0.25 * lumps)
 
     # Flatten a landing pad so the rover spawns on safe, level ground.
     d = np.hypot(gx - spawn["x"], gy - spawn["y"])
